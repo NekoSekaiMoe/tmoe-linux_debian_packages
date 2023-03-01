@@ -7,4 +7,4 @@ Essential: no
 Installed-Size: 86000
 Maintainer: https://github.com/2moe/tmoe
 Description: tmoe-linux-tool
-Pre-Depends: aptitude,aria2,binutils,catimg,fontconfig,git,less,xz-utils,wget,zstd,apt-utils,whiptail,curl,eatmydata
+Pre-Depends: aptitude,aria2,binutils,catimg,fontconfig,git,less,xz-utils,wget,zstd,apt-utils,whiptail,curl,eatmydata,micro
