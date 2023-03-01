@@ -1,0 +1,2 @@
+rm /usr/local/bin/tmoe
+rm -rf ~/.config/tmoe-linux

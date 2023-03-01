@@ -1,0 +1,6 @@
+N: Number=0 Name=rfkill
+N: Number=1 Name=kbd
+N: Number=2 Name=leds
+N: Number=3 Name=mousedev Minor=32
+N: Number=4 Name=evdev Minor=64
+N: Number=5 Name=joydev Minor=0
