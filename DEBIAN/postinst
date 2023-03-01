@@ -2,5 +2,5 @@
 git config --global http.sslverify false
 git config --global https.sslverify false
 git clone -b master --depth=1 https://gitee.com/mo2/linux /usr/local/etc/tmoe-linux/git
+chmod 755 /usr/local/etc/tmoe-linux -R
 ln -s /usr/local/etc/tmoe-linux/git/drbian.sh /usr/local/bin/tmoe
-chmod 777 -R /usr/local/bin/tmoe
