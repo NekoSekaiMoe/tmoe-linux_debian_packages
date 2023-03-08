@@ -1,6 +1,18 @@
-
 git config --global http.sslverify false
 git config --global https.sslverify false
-git clone -b master --depth=1 https://gitee.com/mo2/linux /usr/local/etc/tmoe-linux/git
-chmod 755 /usr/local/etc/tmoe-linux -R
-ln -s /usr/local/etc/tmoe-linux/git/debian.sh /usr/local/bin/tmoe
+
+if [ -d /usr/local/etc/tmoe-linux/git ] 
+then 
+     chmod 755 /usr/local/etc/tmoe-linux -R
+else
+     git clone -b master --depth=1 https://gitee.com/mo2/linux /usr/local/etc/tmoe-linux/git
+     chmod 755 /usr/local/etc/tmoe-linux -R
+fi
+ 
+if [ -L /usr/local/bin/tmoe ] 
+then 
+    echo "done."
+else
+    ln -s /usr/local/etc/tmoe-linux/git/debian.sh /usr/local/bin/tmoe 
+fi
+
