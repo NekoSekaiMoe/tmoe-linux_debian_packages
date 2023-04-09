@@ -242,15 +242,7 @@ check_chroot_mode_01() {
         fi
     fi
 }
-check_manager_dir() {
-    MANAGER_DIR_01="${HOME}/.local/share/tmoe-linux/git"
-    MANAGER_DIR_02="/usr/local/etc/tmoe-linux/git"
-    if [ -e "${MANAGER_DIR_01}" ]; then
-        MANAGER_DIR=${MANAGER_DIR_01}
-    else
-        MANAGER_DIR=${MANAGER_DIR_02}
-    fi
-}
+
 source_tmoe_env() {
     TMOE_CONTAINER_FORTUNE=true
     TMOE_CONTAINER_HITOKOTO=true
