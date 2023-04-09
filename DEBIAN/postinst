@@ -1,8 +1,0 @@
-#!/bin/bash
-if [ -L /usr/local/bin/tmoe ] 
-then 
-    echo "done."
-else
-    ln -s /usr/local/etc/tmoe-linux/git/debian.sh /usr/local/bin/tmoe 
-fi
-
