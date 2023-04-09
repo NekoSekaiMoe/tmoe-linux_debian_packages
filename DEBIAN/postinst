@@ -1,16 +1,4 @@
-git config --global http.sslverify false
-git config --global https.sslverify false
-
-if [ -d /usr/local/etc/tmoe-linux/git ] 
-then 
-     chmod 755 /usr/local/etc/tmoe-linux -R
-     cd /usr/local/etc/tmoe-linux/git
-     git pull
-else
-     git clone -b master --depth=1 https://gitee.com/mo2/linux /usr/local/etc/tmoe-linux/git
-     chmod 755 /usr/local/etc/tmoe-linux -R
-fi
- 
+#!/bin/bash
 if [ -L /usr/local/bin/tmoe ] 
 then 
     echo "done."
