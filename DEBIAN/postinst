@@ -1,7 +1,7 @@
 git config --global http.sslverify false
 git config --global https.sslverify false
 
-if [ -d /usr/local/etc/tmoe-linux/git ] 
+if [ -d /usr/local/etc/tmoe-linux/git.git ] 
 then 
      chmod 755 /usr/local/etc/tmoe-linux -R
      cd /usr/local/etc/tmoe-linux/git
