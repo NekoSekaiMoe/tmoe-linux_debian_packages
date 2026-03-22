@@ -1,6 +1,0 @@
-#!/usr/bin/bash
-
-set -e
-
-rm /usr/local/bin/tmoe
-rm -rf ~/.config/tmoe-linux

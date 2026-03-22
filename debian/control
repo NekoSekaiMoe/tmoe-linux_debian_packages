@@ -1,0 +1,55 @@
+Source: tmoe-python
+Section: admin
+Priority: optional
+Maintainer: 2moe <2moe@example.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3-all,
+               python3-setuptools,
+               python3-poetry-core,
+               pybuild-plugin-pyproject,
+Standards-Version: 4.6.0
+Homepage: https://github.com/2moe/tmoe
+Vcs-Browser: https://github.com/2moe/tmoe
+Vcs-Git: https://github.com/2moe/tmoe.git
+Rules-Requires-Root: no
+
+Package: tmoe-python
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-textual,
+         python3-pydantic,
+         python3-httpx,
+         python3-rich,
+         python3-typing-extensions,
+         proot (>= 5.1.0),
+         curl | wget,
+         tar,
+         xz-utils,
+Recommends: qemu-user-static,
+            docker.io | docker-ce,
+            tigervnc-standalone-server,
+            x11vnc,
+            websockify,
+            git,
+Suggests: qemu-system,
+          virtualbox,
+Description: TMOE - More Optional Environments (Python 3.10+)
+ TMOE is a tool for managing Linux containers and GUI desktop environments,
+ especially on Android/Termux. This is a complete rewrite in Python 3.10+.
+ .
+ Features:
+  - Proot containers (no root required)
+  - Chroot containers (root required)
+  - Docker container support
+  - GUI desktop installation (XFCE, LXDE, MATE, KDE, GNOME)
+  - VNC/noVNC remote desktop
+  - Application center with package manager integration
+  - Mirror source management for China users
+  - Container backup/restore
+  - Cross-architecture support (QEMU)
+  - Modern TUI interface using Textual
+ .
+ This package provides the Python implementation of TMOE,
+ replacing the original shell script version.

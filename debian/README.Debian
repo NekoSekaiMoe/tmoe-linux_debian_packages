@@ -1,0 +1,76 @@
+tmoe-python for Debian
+======================
+
+This is the Debian packaging for TMOE Python - a complete rewrite of the
+TMOE Linux container management tool in Python 3.10+.
+
+Building the Package
+--------------------
+
+To build the Debian package, you need:
+
+1. Install build dependencies:
+   sudo apt-get install build-essential debhelper dh-python python3-all
+   python3-setuptools python3-poetry-core
+
+2. Build the package:
+   dpkg-buildpackage -us -uc -b
+
+   Or using debuild:
+   debuild -us -uc -b
+
+3. The .deb file will be created in the parent directory.
+
+Installing
+----------
+
+After building, install with:
+   sudo dpkg -i ../tmoe-python_2.0.0-1_all.deb
+   sudo apt-get install -f  # To install any missing dependencies
+
+Or add to a local repository and install via apt.
+
+Dependencies
+------------
+
+Required:
+- python3-textual
+- python3-pydantic
+- python3-httpx
+- python3-rich
+- proot (for proot containers)
+- curl or wget
+
+Recommended:
+- qemu-user-static (for cross-architecture containers)
+- docker.io (for Docker container support)
+- tigervnc-standalone-server (for VNC support)
+
+Configuration
+-------------
+
+System-wide configuration: /usr/local/etc/tmoe-linux/
+User configuration: ~/.config/tmoe-linux/
+
+Container storage:
+- Regular Linux: ~/.local/share/tmoe-linux/containers/
+- Android/Termux: /data/data/com.termux/files/home/.local/share/tmoe-linux/containers/
+
+Running
+-------
+
+Launch the TUI manager:
+   tmoe
+
+Or use specific commands:
+   tmoe p debian        # Create proot Debian container
+   tmoe ls              # List containers
+   tmoe --help          # Show help
+
+More Information
+----------------
+
+Upstream: https://github.com/2moe/tmoe
+Documentation: https://doc.tmoe.me
+
+ -- 2moe <2moe@example.com>  Sun, 22 Mar 2026 12:00:00 +0800

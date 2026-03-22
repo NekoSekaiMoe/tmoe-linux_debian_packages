@@ -1,0 +1,16 @@
+tmoe-python (2.0.0-1) unstable; urgency=medium
+
+  * Initial release of Python 3.10+ rewrite
+  * Complete rewrite from shell scripts to Python
+  * Modern TUI interface using Textual
+  * Support for Proot, Chroot, and Docker containers
+  * GUI desktop environment installation (XFCE, LXDE, MATE, KDE, GNOME)
+  * VNC/noVNC remote desktop support
+  * Application center with package manager integration
+  * Mirror source management for China users
+  * Container backup and restore functionality
+  * Cross-architecture support with QEMU
+  * Internationalization support (Chinese, Japanese, English)
+  * LXC image downloading from official mirrors
+
+ -- 2moe <2moe@example.com>  Sun, 22 Mar 2026 12:00:00 +0800

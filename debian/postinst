@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create necessary directories
+        if [ -d /data/data/com.termux/files ]; then
+            # Termux/Android environment
+            mkdir -p /data/data/com.termux/files/usr/etc/tmoe-linux
+            mkdir -p /data/data/com.termux/files/home/.config/tmoe-linux
+        else
+            # Regular Linux environment
+            mkdir -p /usr/local/etc/tmoe-linux
+            mkdir -p /var/lib/tmoe-python
+        fi
+        
+        # Update icon cache
+        if which update-icon-caches >/dev/null 2>&1 ; then
+            update-icon-caches /usr/share/icons/hicolor
+        fi
+        
+        # Update desktop database
+        if which update-desktop-database >/dev/null 2>&1 ; then
+            update-desktop-database /usr/share/applications
+        fi
+        
+        # Update man database
+        if which mandb >/dev/null 2>&1 ; then
+            mandb >/dev/null 2>&1 || true
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,98 @@
+.TH TMOE 1 "2026-03-22" "2.0.0" "TMOE Manual"
+.SH NAME
+tmoe \- Manage Linux containers and GUI desktop environments
+.SH SYNOPSIS
+.B tmoe
+[\fIOPTIONS\fR] [\fICOMMAND\fR]
+.SH DESCRIPTION
+.B TMOE
+(TMOE, More Optional Environments) is a tool for managing Linux containers
+and GUI desktop environments, especially on Android/Termux.
+.PP
+This is the Python 3.10+ rewrite with a modern TUI interface.
+.SH COMMANDS
+.TP
+.BR "p, proot"
+Manage Proot containers (no root required)
+.TP
+.BR "c, chroot"
+Manage Chroot containers (root required)
+.TP
+.BR "d, docker"
+Manage Docker containers
+.TP
+.BR "ls, list"
+List installed containers
+.TP
+.BR "t, tool"
+Open tools menu
+.TP
+.BR "m, manager"
+Launch TUI manager (default)
+.TP
+.BR "zsh"
+Manage Zsh configuration
+.TP
+.BR "aria2"
+Manage aria2 downloader
+.TP
+.BR "theme"
+Manage Zsh themes
+.TP
+.BR "-h, --help"
+Show help message
+.TP
+.BR "-v, --version"
+Show version information
+.SH OPTIONS
+.TP
+.BR "--debug"
+Enable debug mode
+.TP
+.BR "--verbose"
+Enable verbose output
+.TP
+.BR "--locale " \fILOCALE\fR
+Set locale (e.g., zh_CN, en_US)
+.SH EXAMPLES
+.TP
+Launch TUI manager:
+.B tmoe
+.TP
+Create a new Proot Debian container:
+.B tmoe p debian
+.TP
+List all containers:
+.B tmoe ls
+.TP
+Start a specific container:
+.B tmoe p start debian
+.SH FILES
+.TP
+.I ~/.config/tmoe-linux/config.json
+User configuration file
+.TP
+.I ~/.local/share/tmoe-linux/containers/
+Container storage directory (Android/Termux)
+.TP
+.I /usr/local/etc/tmoe-linux/
+System-wide configuration directory
+.SH ENVIRONMENT
+.TP
+.B TMOE_LOCALE
+Default locale setting
+.TP
+.B TMOE_DEBUG
+Enable debug mode when set to 1
+.SH AUTHOR
+Written by 2moe.
+.SH REPORTING BUGS
+Report bugs at: https://github.com/2moe/tmoe/issues
+.SH COPYRIGHT
+Copyright \(co 2026 2moe.
+License Apache-2.0: Apache License version 2.0
+.SH SEE ALSO
+.BR proot (1),
+.BR chroot (1),
+.BR docker (1),
+.BR tigervncserver (1)
