@@ -68,16 +68,16 @@ class ProotBackend(ContainerBackend):
             List of ContainerInfo objects for proot containers.
         """
         containers: list[ContainerInfo] = []
-        proot_dir = self.platform.proot_dir
+        config_dir = self.platform.config_dir / "containers"
         
-        if not proot_dir.exists():
+        if not config_dir.exists():
             return containers
         
-        for path in proot_dir.iterdir():
-            if path.is_dir():
-                name = path.name
+        for path in config_dir.iterdir():
+            if path.is_file() and path.suffix == ".json":
+                name = path.stem
                 config = self.load_container_config(name)
-                if config:
+                if config and config.container_type == "proot":
                     info = ContainerInfo(
                         name=name,
                         config=config,
@@ -106,8 +106,8 @@ class ProotBackend(ContainerBackend):
     
     async def exists(self, name: str) -> bool:
         """Check if a proot container exists."""
-        container_path = self.get_container_path(name)
-        return container_path.exists()
+        config_path = self.get_container_config_path(name)
+        return config_path.exists()
     
     async def get_info(self, name: str) -> ContainerInfo | None:
         """Get information about a proot container."""

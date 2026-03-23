@@ -23,7 +23,7 @@ def mock_platform(tmp_path):
 @pytest.fixture
 def novnc_manager(mock_platform):
     """Create a noVNC manager with mock platform."""
-    with patch('tmoe.gui.novnc.PlatformInfo', return_value=mock_platform):
+    with patch('tmoe.core.platform.PlatformInfo', return_value=mock_platform):
         manager = NoVncManager(data_dir=mock_platform.data_dir)
         return manager
 
@@ -77,7 +77,7 @@ class TestNoVncInitialization:
         """Test initialization with custom data directory."""
         custom_dir = tmp_path / "custom_novnc"
         
-        with patch('tmoe.gui.novnc.PlatformInfo'):
+        with patch('tmoe.core.platform.PlatformInfo'):
             manager = NoVncManager(data_dir=custom_dir)
             
             assert manager.data_dir == custom_dir
@@ -184,8 +184,10 @@ class TestNoVncInstallation:
             await novnc_manager.install()
             
             # Should only clone websockify, not noVNC
+            assert mock_exec.call_count == 1
             call_args = mock_exec.call_args[0]
-            assert "websockify" in call_args
+            # Check that websockify repo is in the call args
+            assert any("websockify" in str(arg) for arg in call_args)
 
 
 class TestWebsockifyCommand:
@@ -249,18 +251,27 @@ class TestNoVncLifecycle:
     @pytest.mark.asyncio
     async def test_start_not_installed(self, novnc_manager):
         """Test start installs noVNC if not present."""
-        mock_proc = AsyncMock()
-        mock_proc.returncode = None
+        # Create separate mock procs for install (returncode=0) and start (returncode=None)
+        install_proc = AsyncMock()
+        install_proc.returncode = 0
+        install_proc.communicate = AsyncMock(return_value=(b"", b""))
         
-        with patch('asyncio.create_subprocess_exec', return_value=mock_proc) as mock_exec:
+        start_proc = AsyncMock()
+        start_proc.returncode = None  # Still running
+        start_proc.communicate = AsyncMock(return_value=(b"", b""))
+        
+        # First 2 calls are for install, 3rd call is for start
+        procs = [install_proc, install_proc, start_proc]
+        proc_iter = iter(procs)
+        
+        with patch('asyncio.create_subprocess_exec', side_effect=lambda *args, **kwargs: next(proc_iter)) as mock_exec:
             with patch('shutil.which', return_value="/usr/bin/websockify"):
-                # First two calls for install, third for start
-                mock_proc.returncode = 0  # For install
-                
-                url = await novnc_manager.start()
-                
-                # Should have called for install (2 calls) + start (1 call)
-                assert mock_exec.call_count >= 1
+                with patch('asyncio.sleep', AsyncMock()):  # Skip sleep
+                    
+                    url = await novnc_manager.start()
+                    
+                    # Should have called for install (2 calls) + start (1 call)
+                    assert mock_exec.call_count >= 1
     
     @pytest.mark.asyncio
     async def test_start_install_fails(self, novnc_manager):
@@ -321,8 +332,8 @@ class TestNoVncLifecycle:
         """Test stop kills process if terminate times out."""
         mock_proc = AsyncMock()
         mock_proc.returncode = None
-        # Make wait raise TimeoutError
-        mock_proc.wait = AsyncMock(side_effect=asyncio.TimeoutError())
+        # Make wait raise TimeoutError on first call, then succeed
+        mock_proc.wait = AsyncMock(side_effect=[asyncio.TimeoutError(), None])
         novnc_manager._websockify_proc = mock_proc
         
         await novnc_manager.stop()

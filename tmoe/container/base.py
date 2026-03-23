@@ -219,6 +219,9 @@ class ContainerBackend(ABC):
         
         import json
         data = json.loads(config_path.read_text())
+        # Convert rootfs_path from string to Path if present
+        if "rootfs_path" in data and data["rootfs_path"]:
+            data["rootfs_path"] = Path(data["rootfs_path"])
         return ContainerConfig(**data)
     
     def save_container_config(self, config: ContainerConfig) -> None:
@@ -227,9 +230,18 @@ class ContainerBackend(ABC):
         Args:
             config: Container configuration.
         """
+        from dataclasses import asdict
+        import json
+        
         config_path = self.get_container_config_path(config.name)
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        config_path.write_text(config.model_dump_json(indent=2))
+        
+        # Convert dataclass to dict and handle Path serialization
+        data = asdict(config)
+        if data.get("rootfs_path"):
+            data["rootfs_path"] = str(data["rootfs_path"])
+        
+        config_path.write_text(json.dumps(data, indent=2))
     
     def check_root(self) -> None:
         """Check if root is required and available.

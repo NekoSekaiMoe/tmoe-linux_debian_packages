@@ -1,1 +1,6 @@
 __pycache__/
+.pybuild/
+build/
+dist/
+*.pyc
+tmoe.egg-info/

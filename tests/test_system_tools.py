@@ -79,9 +79,16 @@ class TestDistroDetection:
         # Create a new manager to avoid cached distro
         manager = SystemToolManager()
         manager._detected_distro = None
-        with patch("os.path.exists") as mock_exists:
-            # os-release doesn't exist, arch-release does
-            mock_exists.side_effect = lambda p: "arch-release" in str(p) and "os-release" not in str(p)
+        # Mock Path.exists to return False for os-release, True for arch-release
+        original_exists = Path.exists
+        def mock_exists(self):
+            path_str = str(self)
+            if "os-release" in path_str:
+                return False
+            if "arch-release" in path_str:
+                return True
+            return original_exists(self)
+        with patch.object(Path, "exists", mock_exists):
             distro = manager.detect_distro()
         
         assert distro == "arch"

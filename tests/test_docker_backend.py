@@ -84,64 +84,64 @@ class TestDockerContainerLifecycle:
     @pytest.mark.asyncio
     async def test_create_container_success(self, docker_backend):
         """Test successful container creation."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'exists', return_value=False):
-                with patch.object(docker_backend, 'save_container_config') as mock_save:
-                    config = await docker_backend.create(
-                        name="test-debian",
-                        distro="debian",
-                        arch="amd64",
-                        codename="bookworm"
-                    )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'exists', return_value=False):
+            with patch.object(docker_backend, 'save_container_config') as mock_save:
+                config = await docker_backend.create(
+                    name="test-debian",
+                    distro="debian",
+                    arch="amd64",
+                    codename="bookworm"
+                )
                     
-                    assert config.name == "test-debian"
-                    assert config.distro == "debian"
-                    assert config.arch == "amd64"
-                    assert config.codename == "bookworm"
-                    assert config.container_type == "docker"
-                    assert config.user == "root"
-                    mock_save.assert_called_once()
+                assert config.name == "test-debian"
+                assert config.distro == "debian"
+                assert config.arch == "amd64"
+                assert config.codename == "bookworm"
+                assert config.container_type == "docker"
+                assert config.user == "root"
+                mock_save.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_create_container_already_exists(self, docker_backend):
         """Test creating container that already exists raises error."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'exists', return_value=True):
-                with pytest.raises(ValueError, match="already exists"):
-                    await docker_backend.create("existing-container", "debian")
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'exists', return_value=True):
+            with pytest.raises(ValueError, match="already exists"):
+                await docker_backend.create("existing-container", "debian")
     
     @pytest.mark.asyncio
     async def test_create_container_docker_not_available(self, docker_backend):
         """Test creating container when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
-            with pytest.raises(RuntimeError, match="not available"):
-                await docker_backend.create("test-container", "debian")
+        docker_backend._docker_available = False
+        with pytest.raises(RuntimeError, match="not available"):
+            await docker_backend.create("test-container", "debian")
     
     @pytest.mark.asyncio
     async def test_create_container_default_arch(self, docker_backend):
         """Test container creation uses default arch when not specified."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'exists', return_value=False):
-                with patch.object(docker_backend, 'save_container_config'):
-                    config = await docker_backend.create(
-                        name="test-default",
-                        distro="ubuntu"
-                    )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'exists', return_value=False):
+            with patch.object(docker_backend, 'save_container_config'):
+                config = await docker_backend.create(
+                    name="test-default",
+                    distro="ubuntu"
+                )
                     
-                    assert config.arch == "amd64"  # From mock_platform
+                assert config.arch == "amd64"  # From mock_platform
     
     @pytest.mark.asyncio
     async def test_create_container_default_codename(self, docker_backend):
         """Test container creation uses 'latest' when codename not specified."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'exists', return_value=False):
-                with patch.object(docker_backend, 'save_container_config'):
-                    config = await docker_backend.create(
-                        name="test-latest",
-                        distro="alpine"
-                    )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'exists', return_value=False):
+            with patch.object(docker_backend, 'save_container_config'):
+                config = await docker_backend.create(
+                    name="test-latest",
+                    distro="alpine"
+                )
                     
-                    assert config.codename == "latest"
+                assert config.codename == "latest"
 
 
 class TestDockerContainerOperations:
@@ -150,25 +150,25 @@ class TestDockerContainerOperations:
     @pytest.mark.asyncio
     async def test_exists_when_container_exists(self, docker_backend):
         """Test exists returns True when container exists."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
-                result = await docker_backend.exists("existing-container")
-                assert result is True
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
+            result = await docker_backend.exists("existing-container")
+            assert result is True
     
     @pytest.mark.asyncio
     async def test_exists_when_container_not_exists(self, docker_backend):
         """Test exists returns False when container doesn't exist."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(1, "", "Error")):
-                result = await docker_backend.exists("nonexistent-container")
-                assert result is False
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(1, "", "Error")):
+            result = await docker_backend.exists("nonexistent-container")
+            assert result is False
     
     @pytest.mark.asyncio
     async def test_exists_docker_not_available(self, docker_backend):
         """Test exists returns False when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
-            result = await docker_backend.exists("any-container")
-            assert result is False
+        docker_backend._docker_available = False
+        result = await docker_backend.exists("any-container")
+        assert result is False
     
     @pytest.mark.asyncio
     async def test_start_container_success(self, docker_backend):
@@ -180,19 +180,19 @@ class TestDockerContainerOperations:
             container_type="docker"
         )
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'load_container_config', return_value=config):
-                with patch.object(docker_backend, 'exists', return_value=True):
-                    with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
-                        await docker_backend.start("test-start")
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'load_container_config', return_value=config):
+            with patch.object(docker_backend, 'exists', return_value=True):
+                with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
+                    await docker_backend.start("test-start")
     
     @pytest.mark.asyncio
     async def test_start_container_not_found(self, docker_backend):
         """Test starting a container that doesn't exist in config."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'load_container_config', return_value=None):
-                with pytest.raises(ValueError, match="not found"):
-                    await docker_backend.start("missing-config")
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'load_container_config', return_value=None):
+            with pytest.raises(ValueError, match="not found"):
+                await docker_backend.start("missing-config")
     
     @pytest.mark.asyncio
     async def test_start_creates_new_container(self, docker_backend):
@@ -205,28 +205,28 @@ class TestDockerContainerOperations:
             container_type="docker"
         )
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'load_container_config', return_value=config):
-                with patch.object(docker_backend, 'exists', return_value=False):
-                    with patch.object(docker_backend, '_create_container') as mock_create:
-                        await docker_backend.start("test-create-new")
-                        mock_create.assert_called_once()
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'load_container_config', return_value=config):
+            with patch.object(docker_backend, 'exists', return_value=False):
+                with patch.object(docker_backend, '_create_container') as mock_create:
+                    await docker_backend.start("test-create-new")
+                    mock_create.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_stop_container_success(self, docker_backend):
         """Test stopping a container successfully."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")) as mock_run:
-                await docker_backend.stop("test-stop")
-                mock_run.assert_called_once_with(["stop", "test-stop"])
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")) as mock_run:
+            await docker_backend.stop("test-stop")
+            mock_run.assert_called_once_with(["stop", "test-stop"])
     
     @pytest.mark.asyncio
     async def test_stop_container_docker_not_available(self, docker_backend):
         """Test stop returns early when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
-            with patch.object(docker_backend, '_run_docker') as mock_run:
-                await docker_backend.stop("test-stop")
-                mock_run.assert_not_called()
+        docker_backend._docker_available = False
+        with patch.object(docker_backend, '_run_docker') as mock_run:
+            await docker_backend.stop("test-stop")
+            mock_run.assert_not_called()
     
     @pytest.mark.asyncio
     async def test_remove_container_normal(self, docker_backend):
@@ -234,21 +234,21 @@ class TestDockerContainerOperations:
         config_path = docker_backend.platform.config_dir / "test-remove.json"
         config_path.touch()
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")) as mock_run:
-                with patch.object(docker_backend, 'get_container_config_path', return_value=config_path):
-                    await docker_backend.remove("test-remove", force=False)
-                    mock_run.assert_called_once_with(["rm", "test-remove"])
-                    assert not config_path.exists()
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")) as mock_run:
+            with patch.object(docker_backend, 'get_container_config_path', return_value=config_path):
+                await docker_backend.remove("test-remove", force=False)
+                mock_run.assert_called_once_with(["rm", "test-remove"])
+                assert not config_path.exists()
     
     @pytest.mark.asyncio
     async def test_remove_container_force(self, docker_backend):
         """Test force removing a container."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")) as mock_run:
-                with patch.object(docker_backend, 'get_container_config_path', return_value=Path("/nonexistent")):
-                    await docker_backend.remove("test-force", force=True)
-                    mock_run.assert_called_once_with(["rm", "-f", "test-force"])
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")) as mock_run:
+            with patch.object(docker_backend, 'get_container_config_path', return_value=Path("/nonexistent")):
+                await docker_backend.remove("test-force", force=True)
+                mock_run.assert_called_once_with(["rm", "-f", "test-force"])
 
 
 class TestDockerExec:
@@ -257,36 +257,36 @@ class TestDockerExec:
     @pytest.mark.asyncio
     async def test_exec_command_success(self, docker_backend):
         """Test executing a command in container."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "output", "")) as mock_run:
-                exit_code, stdout, stderr = await docker_backend.exec(
-                    "test-container",
-                    ["ls", "-la"]
-                )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "output", "")) as mock_run:
+            exit_code, stdout, stderr = await docker_backend.exec(
+                "test-container",
+                ["ls", "-la"]
+            )
                 
-                assert exit_code == 0
-                assert stdout == "output"
-                mock_run.assert_called_once_with(["exec", "test-container", "ls", "-la"])
+            assert exit_code == 0
+            assert stdout == "output"
+            mock_run.assert_called_once_with(["exec", "test-container", "ls", "-la"])
     
     @pytest.mark.asyncio
     async def test_exec_command_failure(self, docker_backend):
         """Test exec when command fails."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(1, "", "error message")):
-                exit_code, stdout, stderr = await docker_backend.exec(
-                    "test-container",
-                    ["false"]
-                )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(1, "", "error message")):
+            exit_code, stdout, stderr = await docker_backend.exec(
+                "test-container",
+                ["false"]
+            )
                 
-                assert exit_code == 1
-                assert stderr == "error message"
+            assert exit_code == 1
+            assert stderr == "error message"
     
     @pytest.mark.asyncio
     async def test_exec_docker_not_available(self, docker_backend):
         """Test exec raises error when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
-            with pytest.raises(RuntimeError, match="not available"):
-                await docker_backend.exec("test-container", ["ls"])
+        docker_backend._docker_available = False
+        with pytest.raises(RuntimeError, match="not available"):
+            await docker_backend.exec("test-container", ["ls"])
 
 
 class TestDockerGetInfo:
@@ -309,16 +309,16 @@ class TestDockerGetInfo:
             }
         }
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, json.dumps(inspect_data), "")):
-                info = await docker_backend.get_info("running-container")
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, json.dumps(inspect_data), "")):
+            info = await docker_backend.get_info("running-container")
                 
-                assert info is not None
-                assert info.name == "running-container"
-                assert info.config.distro == "debian"
-                assert info.config.arch == "arm64"
-                assert info.status == ContainerStatus.RUNNING
-                assert info.pid == 1234
+            assert info is not None
+            assert info.name == "running-container"
+            assert info.config.distro == "debian"
+            assert info.config.arch == "arm64"
+            assert info.status == ContainerStatus.RUNNING
+            assert info.pid == 1234
     
     @pytest.mark.asyncio
     async def test_get_info_stopped_container(self, docker_backend):
@@ -333,13 +333,13 @@ class TestDockerGetInfo:
             }
         }
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, json.dumps(inspect_data), "")):
-                info = await docker_backend.get_info("stopped-container")
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, json.dumps(inspect_data), "")):
+            info = await docker_backend.get_info("stopped-container")
                 
-                assert info is not None
-                assert info.status == ContainerStatus.STOPPED
-                assert info.pid is None
+            assert info is not None
+            assert info.status == ContainerStatus.STOPPED
+            assert info.pid is None
     
     @pytest.mark.asyncio
     async def test_get_info_paused_container(self, docker_backend):
@@ -354,35 +354,35 @@ class TestDockerGetInfo:
             }
         }
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, json.dumps(inspect_data), "")):
-                info = await docker_backend.get_info("paused-container")
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, json.dumps(inspect_data), "")):
+            info = await docker_backend.get_info("paused-container")
                 
-                assert info is not None
-                assert info.status == ContainerStatus.PAUSED
+            assert info is not None
+            assert info.status == ContainerStatus.PAUSED
     
     @pytest.mark.asyncio
     async def test_get_info_container_not_exists(self, docker_backend):
         """Test getting info for non-existent container."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(1, "", "No such container")):
-                info = await docker_backend.get_info("nonexistent")
-                assert info is None
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(1, "", "No such container")):
+            info = await docker_backend.get_info("nonexistent")
+            assert info is None
     
     @pytest.mark.asyncio
     async def test_get_info_docker_not_available(self, docker_backend):
         """Test getting info when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
-            info = await docker_backend.get_info("any-container")
-            assert info is None
+        docker_backend._docker_available = False
+        info = await docker_backend.get_info("any-container")
+        assert info is None
     
     @pytest.mark.asyncio
     async def test_get_info_invalid_json(self, docker_backend):
         """Test handling invalid JSON from docker inspect."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "invalid json", "")):
-                info = await docker_backend.get_info("bad-container")
-                assert info is None
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "invalid json", "")):
+            info = await docker_backend.get_info("bad-container")
+            assert info is None
 
 
 class TestDockerListContainers:
@@ -396,51 +396,51 @@ class TestDockerListContainers:
             {"Names": "container2"}
         ]
         
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "\n".join([json.dumps(d) for d in container_data]), "")):
-                with patch.object(docker_backend, 'get_info') as mock_get_info:
-                    mock_get_info.side_effect = [
-                        Mock(name="container1"),
-                        Mock(name="container2")
-                    ]
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "\n".join([json.dumps(d) for d in container_data]), "")):
+            with patch.object(docker_backend, 'get_info') as mock_get_info:
+                mock_get_info.side_effect = [
+                    Mock(name="container1"),
+                    Mock(name="container2")
+                ]
                     
-                    containers = await docker_backend.list_containers()
+                containers = await docker_backend.list_containers()
                     
-                    assert len(containers) == 2
-                    assert mock_get_info.call_count == 2
+                assert len(containers) == 2
+                assert mock_get_info.call_count == 2
     
     @pytest.mark.asyncio
     async def test_list_containers_empty(self, docker_backend):
         """Test listing when no containers exist."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
-                containers = await docker_backend.list_containers()
-                assert containers == []
-    
-    @pytest.mark.asyncio
-    async def test_list_containers_docker_not_available(self, docker_backend):
-        """Test listing returns empty list when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
             containers = await docker_backend.list_containers()
             assert containers == []
     
     @pytest.mark.asyncio
+    async def test_list_containers_docker_not_available(self, docker_backend):
+        """Test listing returns empty list when Docker is not available."""
+        docker_backend._docker_available = False
+        containers = await docker_backend.list_containers()
+        assert containers == []
+    
+    @pytest.mark.asyncio
     async def test_list_containers_filter_error(self, docker_backend):
         """Test listing when docker command fails."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(1, "", "error")):
-                containers = await docker_backend.list_containers()
-                assert containers == []
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(1, "", "error")):
+            containers = await docker_backend.list_containers()
+            assert containers == []
     
     @pytest.mark.asyncio
     async def test_list_containers_skips_invalid_json(self, docker_backend):
         """Test that containers with invalid JSON are skipped."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, '_run_docker', return_value=(0, "invalid\n{\"Names\": \"valid\"}", "")):
-                with patch.object(docker_backend, 'get_info', return_value=Mock(name="valid")):
-                    containers = await docker_backend.list_containers()
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, '_run_docker', return_value=(0, "invalid\n{\"Names\": \"valid\"}", "")):
+            with patch.object(docker_backend, 'get_info', return_value=Mock(name="valid")):
+                containers = await docker_backend.list_containers()
                     
-                    assert len(containers) == 1
+                assert len(containers) == 1
 
 
 class TestDockerCreateContainer:
@@ -518,7 +518,8 @@ class TestDockerCreateContainer:
         config = ContainerConfig(
             name="test-env",
             distro="fedora",
-            container_type="docker"
+            container_type="docker",
+            arch="amd64"
         )
         
         with patch.object(docker_backend, '_run_docker', return_value=(0, "container_id", "")) as mock_run:
@@ -536,7 +537,8 @@ class TestDockerCreateContainer:
         config = ContainerConfig(
             name="test-fail",
             distro="debian",
-            container_type="docker"
+            container_type="docker",
+            arch="amd64"
         )
         
         with patch.object(docker_backend, '_run_docker', return_value=(1, "", "image not found")):
@@ -560,17 +562,17 @@ class TestDockerAllDistros:
     ])
     async def test_all_distro_images(self, docker_backend, distro, expected_image):
         """Test that all distributions map to correct Docker images."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'exists', return_value=False):
-                with patch.object(docker_backend, 'save_container_config'):
-                    with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
-                        config = await docker_backend.create(
-                            name=f"test-{distro}",
-                            distro=distro
-                        )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'exists', return_value=False):
+            with patch.object(docker_backend, 'save_container_config'):
+                with patch.object(docker_backend, '_run_docker', return_value=(0, "", "")):
+                    config = await docker_backend.create(
+                        name=f"test-{distro}",
+                        distro=distro
+                    )
                         
-                        assert config.distro == distro
-                        assert docker_backend.DISTRO_IMAGES.get(distro) == expected_image
+                    assert config.distro == distro
+                    assert docker_backend.DISTRO_IMAGES.get(distro) == expected_image
 
 
 class TestDockerEdgeCases:
@@ -579,23 +581,23 @@ class TestDockerEdgeCases:
     @pytest.mark.asyncio
     async def test_start_docker_not_available(self, docker_backend):
         """Test start raises error when Docker is not available."""
-        with patch.object(docker_backend, 'is_available', False):
-            with pytest.raises(RuntimeError, match="not available"):
-                await docker_backend.start("test-container")
+        docker_backend._docker_available = False
+        with pytest.raises(RuntimeError, match="not available"):
+            await docker_backend.start("test-container")
     
     @pytest.mark.asyncio
     async def test_unknown_distro_uses_direct_name(self, docker_backend):
         """Test unknown distro uses name directly as image."""
-        with patch.object(docker_backend, 'is_available', True):
-            with patch.object(docker_backend, 'exists', return_value=False):
-                with patch.object(docker_backend, 'save_container_config'):
-                    config = await docker_backend.create(
-                        name="test-unknown",
-                        distro="customlinux"
-                    )
+        docker_backend._docker_available = True
+        with patch.object(docker_backend, 'exists', return_value=False):
+            with patch.object(docker_backend, 'save_container_config'):
+                config = await docker_backend.create(
+                    name="test-unknown",
+                    distro="customlinux"
+                )
                     
-                    # Unknown distro should fallback to using the name directly
-                    assert config.distro == "customlinux"
+                # Unknown distro should fallback to using the name directly
+                assert config.distro == "customlinux"
     
     def test_cached_docker_availability(self, docker_backend):
         """Test that Docker availability is cached."""

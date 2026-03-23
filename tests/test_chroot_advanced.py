@@ -384,7 +384,8 @@ class TestChrootCommandExecution:
     async def test_exec_command(self, chroot_backend, sample_config):
         """Test executing a command in chroot."""
         # Save config file first so container exists
-        config_path = sample_config.rootfs_path.parent / "config" / f"{sample_config.name}.json"
+        # Config path should be: platform.config_dir / containers / name.json
+        config_path = chroot_backend.platform.config_dir / "containers" / f"{sample_config.name}.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         import json
         config_path.write_text(json.dumps({
@@ -419,7 +420,7 @@ class TestChrootCommandExecution:
     async def test_exec_cleanup_on_error(self, chroot_backend, sample_config):
         """Test cleanup happens even on exec error."""
         # Save config file first so container exists
-        config_path = sample_config.rootfs_path.parent / "config" / f"{sample_config.name}.json"
+        config_path = chroot_backend.platform.config_dir / "containers" / f"{sample_config.name}.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         import json
         config_path.write_text(json.dumps({
@@ -451,7 +452,7 @@ class TestChrootSafetyFeatures:
     async def test_proc_mounted_safety_check(self, chroot_backend, sample_config):
         """Test safety check prevents removal when /proc is mounted."""
         # Save config file first so container exists
-        config_path = sample_config.rootfs_path.parent / "config" / f"{sample_config.name}.json"
+        config_path = chroot_backend.platform.config_dir / "containers" / f"{sample_config.name}.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         import json
         config_path.write_text(json.dumps({
@@ -486,7 +487,7 @@ class TestChrootSafetyFeatures:
     async def test_remove_running_container_without_force(self, chroot_backend, sample_config):
         """Test removing running container without force raises error."""
         # Save config file first so container exists
-        config_path = sample_config.rootfs_path.parent / "config" / f"{sample_config.name}.json"
+        config_path = chroot_backend.platform.config_dir / "containers" / f"{sample_config.name}.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         import json
         config_path.write_text(json.dumps({

@@ -59,16 +59,16 @@ class ChrootBackend(ContainerBackend):
         self.check_root()
         
         containers: list[ContainerInfo] = []
-        chroot_dir = self.platform.chroot_dir
+        config_dir = self.platform.config_dir / "containers"
         
-        if not chroot_dir.exists():
+        if not config_dir.exists():
             return containers
         
-        for path in chroot_dir.iterdir():
-            if path.is_dir():
-                name = path.name
+        for path in config_dir.iterdir():
+            if path.is_file() and path.suffix == ".json":
+                name = path.stem
                 config = self.load_container_config(name)
-                if config:
+                if config and config.container_type == "chroot":
                     info = ContainerInfo(
                         name=name,
                         config=config,
@@ -90,8 +90,8 @@ class ChrootBackend(ContainerBackend):
     
     async def exists(self, name: str) -> bool:
         """Check if a chroot container exists."""
-        container_path = self.get_container_path(name)
-        return container_path.exists()
+        config_path = self.get_container_config_path(name)
+        return config_path.exists()
     
     async def get_info(self, name: str) -> ContainerInfo | None:
         """Get information about a chroot container."""

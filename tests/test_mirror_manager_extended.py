@@ -313,7 +313,8 @@ class TestMirrorManagerBackup:
         """Test that sources.list is backed up before modification."""
         manager = MirrorManager()
         
-        with patch.object(Path, "exists", return_value=True):
+        # First call checks sources_list.exists(), second checks backup.exists()
+        with patch.object(Path, "exists", side_effect=[True, False]):
             with patch.object(Path, "read_text", return_value="deb http://deb.debian.org/debian stable main"):
                 with patch("pathlib.Path.rename") as mock_rename:
                     with patch("pathlib.Path.write_text"):
