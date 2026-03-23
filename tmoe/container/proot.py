@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tmoe.container.base import ContainerBackend, ContainerInfo, ContainerStatus
+from tmoe.container.qemu import QEMUManager
 from tmoe.core.config import ContainerConfig, get_config
 from tmoe.core.constants import ARCH_MAPPINGS
 from tmoe.core.platform import PlatformInfo
@@ -202,8 +203,10 @@ class ProotBackend(ContainerBackend):
         config: ContainerConfig,
         command: Sequence[str] | None = None,
     ) -> list[str]:
-        """Build proot command with all necessary options."""
-        cmd = [self.proot_bin]
+        """Build proot command with all necessary options (原版兼容)."""
+        # Determine proot binary to use
+        proot_binary = self._get_proot_binary(config)
+        cmd = [proot_binary]
         
         # Basic options
         cmd.extend([
@@ -211,11 +214,13 @@ class ProotBackend(ContainerBackend):
             f"--pwd={config.home}",
         ])
         
-        # User options
-        if config.user != "root":
-            cmd.append(f"--user={config.uid}:{config.gid}")
+        # User options (原版: --root-id 或 --change-id=uid:gid)
+        if config.user == "root":
+            cmd.append("--root-id")
+        else:
+            cmd.append(f"--change-id={config.uid}:{config.gid}")
         
-        # Feature flags
+        # Feature flags (原版支持)
         if config.kill_on_exit:
             cmd.append("--kill-on-exit")
         if config.sysvipc:
@@ -223,16 +228,25 @@ class ProotBackend(ContainerBackend):
         if config.link2symlink:
             cmd.append("--link2symlink")
         
-        # Fake kernel version for compatibility
+        # Fake kernel version (原版支持)
         if config.fake_kernel:
-            cmd.append("--kernel-release=6.1.0-tmoe")
+            kernel_version = config.fake_kernel_version or "6.1.0-tmoe"
+            cmd.append(f"--kernel-release={kernel_version}")
         
-        # Mounts
+        # Fix lowercase (-L flag for case-insensitive filesystem, 原版支持)
+        if config.fix_lowercase:
+            cmd.append("-L")
+        
+        # QEMU cross-architecture support
+        if config.qemu_enabled and config.qemu_bin:
+            cmd.append(f"--qemu={config.qemu_bin}")
+        
+        # Mounts (原版支持的所有挂载点)
         mounts = self._get_mounts(config)
         for mount in mounts:
             cmd.append(f"--mount={mount}")
         
-        # Environment variables
+        # Environment variables (原版环境变量格式)
         env_vars = self._get_env_vars(config)
         for key, value in env_vars.items():
             cmd.append(f"--env={key}={value}")
@@ -241,34 +255,89 @@ class ProotBackend(ContainerBackend):
         if command:
             cmd.extend(command)
         else:
-            # Default to login shell
-            cmd.append("/bin/bash")
+            # Default to login shell (原版使用 -l)
+            shell = self._get_shell(config)
+            cmd.append(shell)
             cmd.append("-l")
         
         return cmd
     
+    def _get_proot_binary(self, config: ContainerConfig) -> str:
+        """Get proot binary path based on config (原版支持多种proot二进制)."""
+        proot_bin = config.proot_bin or "proot"
+        
+        if proot_bin == "proot":
+            return self.proot_bin
+        elif proot_bin == "32":
+            # 32-bit proot for compatibility
+            return shutil.which("proot32") or self.proot_bin
+        elif proot_bin == "compatible":
+            # Compatible mode proot
+            return shutil.which("proot-compatible") or self.proot_bin
+        
+        return proot_bin if shutil.which(proot_bin) else self.proot_bin
+    
+    def _get_shell(self, config: ContainerConfig) -> str:
+        """Get default shell for container (原版逻辑)."""
+        # Check for common shells in order of preference
+        possible_shells = [
+            "/bin/zsh",
+            "/usr/bin/zsh",
+            "/bin/bash",
+            "/usr/bin/bash",
+            "/bin/sh",
+        ]
+        
+        if config.rootfs_path:
+            for shell in possible_shells:
+                if (config.rootfs_path / shell.lstrip("/")).exists():
+                    return shell
+        
+        return "/bin/bash"
+    
     def _get_mounts(self, config: ContainerConfig) -> list[str]:
-        """Get list of mounts for proot."""
+        """Get list of mounts for proot (原版挂载逻辑)."""
         mounts = []
         
-        # Standard system mounts
-        if config.mount_system and self.platform.is_android:
-            mounts.append("/system")
-        
-        if config.mount_apex and self.platform.is_android:
-            if os.path.exists("/apex"):
+        # Android system mounts (原版支持)
+        if self.platform.is_android:
+            if config.mount_system and os.path.exists("/system"):
+                mounts.append("/system")
+            if config.mount_apex and os.path.exists("/apex"):
                 mounts.append("/apex")
+            # Mount /vendor for some devices
+            if os.path.exists("/vendor"):
+                mounts.append("/vendor")
+            # Mount /odm for some devices
+            if os.path.exists("/odm"):
+                mounts.append("/odm")
         
-        # Device mounts
+        # Device mounts (原版支持)
         mounts.append("/dev")
         mounts.append("/proc")
+        mounts.append("/sys")  # 原版也挂载 /sys
         
-        # Storage mounts
-        if config.mount_termux and self.platform.is_termux:
+        # Storage mounts (原版支持)
+        if self.platform.is_termux:
             termux_prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
-            mounts.append(f"{termux_prefix}/..")
+            termux_home = f"{termux_prefix}/.."
+            
+            if config.mount_termux:
+                mounts.append(f"{termux_home}:/media/termux")  # 原版映射到 /media/termux
+            
+            # SD Card mount (原版支持)
+            if config.mount_sd:
+                sd_path = "/storage/self/primary"
+                if os.path.exists(sd_path):
+                    mounts.append(f"{sd_path}:/media/sd")  # 原版映射到 /media/sd
+                
+                # External storage
+                for i in range(10):
+                    ext_sd = f"/storage/{i}"
+                    if os.path.exists(ext_sd) and os.path.ismount(ext_sd):
+                        mounts.append(f"{ext_sd}:/media/tf{i}")
         
-        # Custom mounts
+        # Custom mounts (用户自定义)
         for mount_config in config.custom_mounts:
             source = mount_config.get("source", "")
             target = mount_config.get("target", "")
@@ -278,28 +347,48 @@ class ProotBackend(ContainerBackend):
         return mounts
     
     def _get_env_vars(self, config: ContainerConfig) -> dict[str, str]:
-        """Get environment variables for container."""
-        env_vars = {
+        """Get environment variables for container (原版环境变量格式)."""
+        env_vars: dict[str, str] = {
+            # Basic environment (原版格式)
             "HOSTNAME": config.name,
             "HOME": config.home,
             "USER": config.user,
-            "TERM": "xterm-256color",
-            "DISPLAY": config.display,
-            "PULSE_SERVER": f"tcp:{self.config.pulse_server}:{self.config.pulse_port}",
+            "TERM": os.environ.get("TERM", "xterm-256color"),
+            "TMPDIR": "/tmp",
+            "TMP": "/tmp",
+            
+            # TMOE specific (原版变量)
             "TMOE_CHROOT": "false",
             "TMOE_PROOT": "true",
             "TMOE_CONTAINER_NAME": config.name,
             "TMOE_CONTAINER_TYPE": "proot",
-            "TMPDIR": "/tmp",
-            # Input method settings
+            "TMOE_DISTRO": config.distro,
+            "TMOE_ARCH": config.arch,
+        }
+        
+        # Display settings (if GUI enabled)
+        if config.display:
+            env_vars["DISPLAY"] = config.display
+        
+        # PulseAudio settings (原版支持)
+        if self.config.pulse_server:
+            env_vars["PULSE_SERVER"] = f"tcp:{self.config.pulse_server}:{self.config.pulse_port}"
+        
+        # Input method settings (原版fcitx配置)
+        env_vars.update({
             "GTK_IM_MODULE": "fcitx",
             "QT_IM_MODULE": "fcitx",
             "XMODIFIERS": "@im=fcitx",
             "SDL_IM_MODULE": "fcitx",
-        }
+            "QT_QPA_PLATFORMTHEME": "gtk2",
+        })
         
-        # PATH
-        env_vars["PATH"] = ":".join([
+        # Locale settings
+        env_vars["LANG"] = self.config.locale
+        env_vars["LANGUAGE"] = self.config.language
+        
+        # PATH (原版PATH顺序)
+        paths = [
             "/usr/local/sbin",
             "/usr/local/bin",
             "/usr/sbin",
@@ -308,7 +397,15 @@ class ProotBackend(ContainerBackend):
             "/bin",
             "/usr/games",
             "/usr/local/games",
-        ])
+            "/opt/bin",
+        ]
+        
+        # Add Termux paths if applicable
+        if self.platform.is_termux:
+            termux_prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
+            paths.insert(0, f"{termux_prefix}/bin")
+        
+        env_vars["PATH"] = ":".join(paths)
         
         return env_vars
     
@@ -401,3 +498,112 @@ class ProotBackend(ContainerBackend):
             stdout.decode("utf-8", errors="replace"),
             stderr.decode("utf-8", errors="replace"),
         )
+    
+    async def configure_qemu(self, name: str, enabled: bool = True) -> bool:
+        """Configure QEMU cross-architecture support for container.
+        
+        Args:
+            name: Container name
+            enabled: Whether to enable QEMU
+            
+        Returns:
+            True if configuration succeeded
+        """
+        config = self.load_container_config(name)
+        if not config:
+            raise ValueError(f"Container '{name}' not found")
+        
+        # Check if cross-arch is needed
+        qemu_manager = QEMUManager(self.platform)
+        if not qemu_manager.is_cross_arch(self.platform.normalized_arch, config.arch):
+            # Same architecture, no QEMU needed
+            config.qemu_enabled = False
+            config.qemu_arch = None
+            config.qemu_bin = None
+            self.save_container_config(config)
+            return True
+        
+        if enabled:
+            # Check if QEMU is available
+            qemu_bin = await qemu_manager.get_qemu_binary(config.arch)
+            if not qemu_bin:
+                # Try to install QEMU
+                if await qemu_manager.install_qemu(config.arch):
+                    qemu_bin = await qemu_manager.get_qemu_binary(config.arch)
+            
+            if qemu_bin:
+                config.qemu_enabled = True
+                config.qemu_arch = config.arch
+                config.qemu_bin = str(qemu_bin)
+                self.save_container_config(config)
+                return True
+            else:
+                return False
+        else:
+            config.qemu_enabled = False
+            config.qemu_arch = None
+            config.qemu_bin = None
+            self.save_container_config(config)
+            return True
+    
+    def generate_startup_script(self, name: str) -> str:
+        """Generate startup script for container (原版启动脚本格式).
+        
+        Args:
+            name: Container name
+            
+        Returns:
+            Shell script content for starting container
+        """
+        config = self.load_container_config(name)
+        if not config:
+            raise ValueError(f"Container '{name}' not found")
+        
+        # Build proot command
+        cmd_parts = self._build_proot_cmd(config)
+        proot_cmd = " ".join(cmd_parts)
+        
+        # Generate script matching original TMOE format
+        script = f'''#!/bin/bash
+# TMOE Proot Container Startup Script
+# Generated automatically - do not edit manually
+
+# Container configuration
+TMOE_CONTAINER_NAME="{config.name}"
+TMOE_CONTAINER_TYPE="proot"
+TMOE_DISTRO="{config.distro}"
+TMOE_ARCH="{config.arch}"
+
+# Environment setup
+export HOME="{config.home}"
+export USER="{config.user}"
+export TERM="{os.environ.get('TERM', 'xterm-256color')}"
+export LANG="{self.config.locale}"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Input method
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+
+# TMOE specific
+export TMOE_CHROOT=false
+export TMOE_PROOT=true
+export TMOE_CONTAINER_NAME="{config.name}"
+
+# Display settings
+export DISPLAY="{config.display}"
+
+# Proot command
+PROOT_CMD="{proot_cmd}"
+
+# Execute proot
+echo "Starting TMOE proot container: {config.name}"
+echo "Distribution: {config.distro} ({config.arch})"
+echo "User: {config.user}"
+echo "Home: {config.home}"
+echo ""
+
+exec {proot_cmd}
+'''
+        return script

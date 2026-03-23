@@ -21,7 +21,7 @@ from textual.widgets import (
     Static,
 )
 
-from tmoe.container.backup import ContainerBackupManager, BackupInfo
+from tmoe.container.backup import BackupManager, BackupInfo
 from tmoe.container.proot import ProotBackend
 from tmoe.core.config import get_config
 from tmoe.core.platform import get_platform_info
@@ -91,7 +91,7 @@ class BackupManagerScreen(Screen):
         self.platform = get_platform_info()
         self.config = get_config()
         self.backend = ProotBackend()
-        self.manager = ContainerBackupManager(self.backend)
+        self.manager = BackupManager()
         self.backups: list[BackupInfo] = []
         super().__init__()
     

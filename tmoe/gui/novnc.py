@@ -165,17 +165,13 @@ class NoVncManager:
     async def stop(self) -> None:
         """Stop noVNC server."""
         if self._websockify_proc:
-            # Handle both sync and async terminate (for testing compatibility)
-            result = self._websockify_proc.terminate()
-            if asyncio.iscoroutine(result):
-                await result
+            # terminate() is a sync method on asyncio.subprocess.Process
+            self._websockify_proc.terminate()
             try:
                 await asyncio.wait_for(self._websockify_proc.wait(), timeout=5)
             except asyncio.TimeoutError:
-                # Handle both sync and async kill (for testing compatibility)
-                result = self._websockify_proc.kill()
-                if asyncio.iscoroutine(result):
-                    await result
+                # kill() is also a sync method
+                self._websockify_proc.kill()
                 await self._websockify_proc.wait()
             self._websockify_proc = None
     
@@ -193,3 +189,91 @@ class NoVncManager:
     def get_url(self) -> str:
         """Get noVNC access URL."""
         return f"http://localhost:{self.config.web_port}/vnc.html"
+
+    def generate_start_script(
+        self,
+        container_name: str | None = None,
+    ) -> str:
+        """Generate noVNC startup script (原版 novnc 脚本格式).
+        
+        Args:
+            container_name: Optional container name
+            
+        Returns:
+            Shell script content
+        """
+        novnc_dir = self.novnc_dir
+        websockify_dir = self.websockify_dir
+        web_port = self.config.web_port
+        vnc_port = self.config.vnc_port
+        
+        script = f'''#!/bin/bash
+# TMOE noVNC Startup Script
+# Generated automatically - do not edit manually
+
+# Configuration
+NOVNC_DIR="{novnc_dir}"
+WEBSOCKIFY_DIR="{websockify_dir}"
+NOVNC_PORT={web_port}
+VNC_PORT={vnc_port}
+NOVNC_ADDR="localhost:${{VNC_PORT}}"
+
+# Colors
+GREEN='\\033[32m'
+YELLOW='\\033[33m'
+BLUE='\\033[34m'
+RESET='\\033[m'
+
+# Check if noVNC is installed
+if [ ! -d "$NOVNC_DIR" ]; then
+    echo "Error: noVNC not found at $NOVNC_DIR"
+    echo "Please install noVNC first"
+    exit 1
+fi
+
+# Check for websockify
+if command -v websockify &> /dev/null; then
+    WEBSOCKIFY_CMD="websockify"
+elif [ -f "$WEBSOCKIFY_DIR/websockify.py" ]; then
+    WEBSOCKIFY_CMD="python3 $WEBSOCKIFY_DIR/websockify.py"
+else
+    echo "Error: websockify not found"
+    exit 1
+fi
+
+# Get current VNC port (in case VNC is running)
+CURRENT_VNC_PORT=${{VNC_PORT}}
+if [ -f "$HOME/.vnc/*:1.pid" ]; then
+    # Try to detect actual VNC port
+    for i in 1 2 3 4 5; do
+        if [ -f "$HOME/.vnc/*:${{i}}.pid" ]; then
+            CURRENT_VNC_PORT=$((5900 + i))
+            break
+        fi
+    done
+fi
+
+echo -e "${{GREEN}}Starting noVNC...${{RESET}}"
+echo -e "VNC backend: ${{YELLOW}}localhost:${{CURRENT_VNC_PORT}}${{RESET}}"
+echo -e "Web interface: ${{BLUE}}http://localhost:${{NOVNC_PORT}}/vnc.html${{RESET}}"
+
+# Kill existing websockify
+pkill -f "websockify.*${{NOVNC_PORT}}" 2>/dev/null || true
+
+# Start websockify
+$WEBSOCKIFY_CMD \\
+    --web "$NOVNC_DIR" \\
+    --cert "$HOME/.vnc/self.pem" \\
+    "$NOVNC_PORT" \\
+    "localhost:${{CURRENT_VNC_PORT}}" &
+
+WEBSOCKIFY_PID=$!
+echo $WEBSOCKIFY_PID > "$HOME/.vnc/novnc_{container_name or 'default'}.pid"
+
+sleep 2
+
+echo -e "${{GREEN}}noVNC started!${{RESET}}"
+echo -e "Access URL: ${{BLUE}}http://localhost:${{NOVNC_PORT}}/vnc.html${{RESET}}"
+echo -e "Or: ${{BLUE}}http://localhost:${{NOVNC_PORT}}/vnc.html?host=localhost&port=${{NOVNC_PORT}}${{RESET}}"
+'''
+        return script

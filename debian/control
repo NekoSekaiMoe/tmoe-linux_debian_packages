@@ -8,6 +8,7 @@ Build-Depends: debhelper-compat (= 13),
                python3-setuptools,
                python3-poetry-core,
                pybuild-plugin-pyproject,
+               python3-pytest,
 Standards-Version: 4.6.0
 Homepage: https://github.com/2moe/tmoe
 Vcs-Browser: https://github.com/2moe/tmoe

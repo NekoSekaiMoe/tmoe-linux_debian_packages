@@ -93,16 +93,24 @@ class AppInstallerScreen(Screen):
             # Tabbed content
             with TabbedContent():
                 with TabPane("🌐 浏览器", id="tab_browser"):
-                    yield self._create_app_grid(AppCategory.BROWSER)
+                    with Grid(classes="app-grid"):
+                        for btn in self._create_app_buttons(AppCategory.BROWSER):
+                            yield btn
                 
                 with TabPane("📝 办公", id="tab_office"):
-                    yield self._create_app_grid(AppCategory.OFFICE)
+                    with Grid(classes="app-grid"):
+                        for btn in self._create_app_buttons(AppCategory.OFFICE):
+                            yield btn
                 
                 with TabPane("💻 开发", id="tab_dev"):
-                    yield self._create_app_grid(AppCategory.DEVELOPMENT)
+                    with Grid(classes="app-grid"):
+                        for btn in self._create_app_buttons(AppCategory.DEVELOPMENT):
+                            yield btn
                 
                 with TabPane("🎬 多媒体", id="tab_media"):
-                    yield self._create_app_grid(AppCategory.MULTIMEDIA)
+                    with Grid(classes="app-grid"):
+                        for btn in self._create_app_buttons(AppCategory.MULTIMEDIA):
+                            yield btn
                 
                 with TabPane("🔧 工具", id="tab_tools"):
                     yield self._create_simple_tools()
@@ -114,29 +122,41 @@ class AppInstallerScreen(Screen):
         
         yield Footer()
     
-    def _create_app_grid(self, category: AppCategory) -> Grid:
-        """Create app buttons grid."""
-        grid = Grid(classes="app-grid")
+    def _create_app_buttons(self, category: AppCategory) -> list[Button]:
+        """Create app buttons for the grid.
         
+        Returns a list of buttons to be yielded in compose.
+        """
+        import re
+        
+        buttons = []
         apps = self.center.get_apps_by_category(category)
         for app in apps:
+            # Generate legal ID: only letters, numbers, underscores, hyphens
+            # and must not begin with a number
+            safe_name = app.name.lower().replace(' ', '_')
+            # Remove illegal characters (keep only letters, numbers, underscores, hyphens)
+            safe_name = re.sub(r'[^a-z0-9_-]', '', safe_name)
+            # Ensure it doesn't start with a number
+            if safe_name and safe_name[0].isdigit():
+                safe_name = 'app_' + safe_name
+            
             btn = Button(
                 f"{app.name}\n[yellow]{app.description}[/]",
-                id=f"app_{app.name.lower().replace(' ', '_')}",
+                id=f"app_{safe_name}",
                 classes="app-button",
             )
-            grid.mount(btn)
-        
-        return grid
+            buttons.append(btn)
+        return buttons
     
     def _create_simple_tools(self) -> Vertical:
         """Create simple tools section."""
         return Vertical(
             Static("常用命令行工具:"),
-            Button("📝 Vim 编辑器", id="app_vim", variant="primary"),
-            Button("🐙 Git 版本控制", id="app_git", variant="primary"),
-            Button("🐍 Python3", id="app_python3", variant="primary"),
-            Button("🐳 Docker", id="app_docker", variant="primary"),
+            Button("📝 Vim 编辑器", id="app_vim_simple", variant="primary"),
+            Button("🐙 Git 版本控制", id="app_git_simple", variant="primary"),
+            Button("🐍 Python3", id="app_python3_simple", variant="primary"),
+            Button("🐳 Docker", id="app_docker_simple", variant="primary"),
             Button("📊 htop 系统监视器", id="app_htop"),
             Button("📡 curl 下载工具", id="app_curl"),
         )
@@ -153,17 +173,54 @@ class AppInstallerScreen(Screen):
         """Install an application."""
         self._log(f"正在安装 {app_name}...")
         
-        # Map button IDs to app names
+        # Map button IDs to app names (must match generated IDs)
         app_map = {
+            # Browsers
             "firefox": "firefox",
             "chromium": "chromium",
             "microsoft_edge": "edge",
+            # Office
             "libreoffice": "libreoffice",
+            "wps_office": "wps",
+            # Development
             "visual_studio_code": "vscode",
+            "pycharm": "pycharm",
+            "intellij_idea": "idea",
+            "android_studio": "android_studio",
             "vim": "vim",
+            "neovim": "neovim",
             "git": "git",
+            "docker": "docker",
+            "nodejs": "nodejs",
+            "python3": "python3",
+            # Multimedia
             "mpv": "mpv",
+            "vlc": "vlc",
             "gimp": "gimp",
+            "audacity": "audacity",
+            "spotify": "spotify",
+            "clementine": "clementine",
+            # Social
+            "linux_qq": "linuxqq",
+            "wechat": "wechat",
+            "skype": "skype",
+            "thunderbird": "thunderbird",
+            # Games
+            "steam": "steam",
+            "kde_games": "kdegames",
+            "retroarch": "retroarch",
+            # Utilities
+            "aria2": "aria2",
+            "baidu_netdisk": "baidunetdisk",
+            "synaptic": "synaptic",
+            "bleachbit": "bleachbit",
+            # Simple tools
+            "vim_simple": "vim",
+            "git_simple": "git",
+            "python3_simple": "python3",
+            "docker_simple": "docker",
+            "htop": "htop",
+            "curl": "curl",
         }
         
         actual_name = app_map.get(app_name, app_name)

@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from datetime import datetime
 
-from tmoe.container.backup import BackupInfo, ContainerBackupManager
+from tmoe.container.backup import BackupInfo, BackupManager
 from tmoe.container.proot import ProotBackend
 
 
@@ -17,8 +17,11 @@ class TestBackupInfo:
             path=Path("/backup/test.tar.xz"),
             name="test.tar.xz",
             container_name="test",
+            container_type="proot",
+            distro="debian",
+            arch="arm64",
+            size=1024 * 1024 * 100,  # 100 MB
             created_at=datetime.now(),
-            size_bytes=1024 * 1024 * 100,  # 100 MB
             compression="xz",
         )
         
@@ -26,58 +29,41 @@ class TestBackupInfo:
         assert info.container_name == "test"
         assert info.compression == "xz"
     
-    def test_backup_info_size_human(self):
-        """Test human-readable size."""
+    def test_backup_info_size(self):
+        """Test size field."""
         info = BackupInfo(
             path=Path("/backup/test.tar.xz"),
             name="test.tar.xz",
             container_name="test",
+            container_type="proot",
+            distro="debian",
+            arch="arm64",
+            size=1024 * 1024 * 100,  # 100 MB
             created_at=datetime.now(),
-            size_bytes=1024 * 1024 * 100,  # 100 MB
             compression="xz",
         )
         
-        assert "MB" in info.size_human
-        assert "100" in info.size_human
-    
-    def test_backup_info_size_human_gb(self):
-        """Test human-readable size in GB."""
-        info = BackupInfo(
-            path=Path("/backup/test.tar.xz"),
-            name="test.tar.xz",
-            container_name="test",
-            created_at=datetime.now(),
-            size_bytes=1024 * 1024 * 1024 * 2,  # 2 GB
-            compression="xz",
-        )
-        
-        assert "GB" in info.size_human
+        assert info.size == 1024 * 1024 * 100
 
 
-class TestContainerBackupManager:
+class TestBackupManager:
     """Test backup manager."""
     
-    def test_manager_creation(self, tmp_path):
+    def test_manager_creation(self):
         """Test manager creation."""
-        backend = ProotBackend()
-        manager = ContainerBackupManager(backend, tmp_path)
+        from tmoe.core.platform import PlatformInfo
+        platform = PlatformInfo()
+        manager = BackupManager(platform)
         
         assert manager is not None
-        assert manager.backend == backend
-        assert manager.backup_dir == tmp_path
+        assert "backups" in str(manager._backup_dir)
     
-    def test_manager_with_custom_dir(self, tmp_path):
-        """Test manager with custom backup directory."""
-        backend = ProotBackend()
-        manager = ContainerBackupManager(backend, tmp_path)
+    def test_get_backup_path(self):
+        """Test backup path generation."""
+        from tmoe.core.platform import PlatformInfo
+        platform = PlatformInfo()
+        manager = BackupManager(platform)
         
-        assert manager.backup_dir == tmp_path
-    
-    def test_generate_backup_name(self, tmp_path):
-        """Test backup name generation."""
-        backend = ProotBackend()
-        manager = ContainerBackupManager(backend, tmp_path)
-        
-        name = manager._generate_backup_name("my-container")
-        assert name.startswith("my-container_")
-        assert len(name) > len("my-container_")
+        path = manager._get_backup_path("my-container")
+        assert "my-container" in str(path)
+        assert str(path).endswith(".tar.zst")

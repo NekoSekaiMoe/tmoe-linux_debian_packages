@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 class AppCategory(Enum):
-    """Application categories."""
-    BROWSER = auto()
-    OFFICE = auto()
-    DEVELOPMENT = auto()
-    MULTIMEDIA = auto()
-    GAME = auto()
-    SOCIAL = auto()
-    UTILITY = auto()
+    """Application categories (原版软件中心分类)."""
+    BROWSER = auto()      # 浏览器
+    OFFICE = auto()       # 办公
+    DEVELOPMENT = auto()  # 开发工具
+    MULTIMEDIA = auto()   # 多媒体
+    GAME = auto()         # 游戏
+    SOCIAL = auto()       # 社交
+    UTILITY = auto()      # 工具
 
 
 @dataclass
@@ -50,9 +50,9 @@ class AppCenter:
         >>> await center.install_browser("firefox")
     """
     
-    # Application definitions
+    # Application definitions (原版软件中心完整列表)
     APPLICATIONS: dict[str, Application] = {
-        # Browsers
+        # ===== BROWSERS (原版支持) =====
         "firefox": Application(
             name="Firefox",
             category=AppCategory.BROWSER,
@@ -88,7 +88,7 @@ class AppCenter:
             external_url="https://packages.microsoft.com/repos/edge",
         ),
         
-        # Office
+        # ===== OFFICE (原版支持) =====
         "libreoffice": Application(
             name="LibreOffice",
             category=AppCategory.OFFICE,
@@ -100,8 +100,19 @@ class AppCenter:
                 "fedora": ["libreoffice"],
             },
         ),
+        "wps": Application(
+            name="WPS Office",
+            category=AppCategory.OFFICE,
+            description="WPS Office suite",
+            packages={
+                "debian": ["wps-office"],
+                "ubuntu": ["wps-office"],
+                "arch": ["wps-office"],
+            },
+            external_url="https://linux.wps.cn",
+        ),
         
-        # Development
+        # ===== DEVELOPMENT (原版支持IDE、编辑器、数据库等) =====
         "vscode": Application(
             name="VS Code",
             category=AppCategory.DEVELOPMENT,
@@ -114,6 +125,39 @@ class AppCenter:
             },
             external_url="https://packages.microsoft.com/repos/code",
         ),
+        "pycharm": Application(
+            name="PyCharm",
+            category=AppCategory.DEVELOPMENT,
+            description="Python IDE by JetBrains",
+            packages={
+                "debian": ["pycharm-community"],
+                "ubuntu": ["pycharm-community"],
+                "arch": ["pycharm-community-edition"],
+                "fedora": ["pycharm-community"],
+            },
+        ),
+        "idea": Application(
+            name="IntelliJ IDEA",
+            category=AppCategory.DEVELOPMENT,
+            description="Java IDE by JetBrains",
+            packages={
+                "debian": ["intellij-idea-community"],
+                "ubuntu": ["intellij-idea-community"],
+                "arch": ["intellij-idea-community-edition"],
+                "fedora": ["intellij-idea-community"],
+            },
+        ),
+        "android_studio": Application(
+            name="Android Studio",
+            category=AppCategory.DEVELOPMENT,
+            description="Android development IDE",
+            packages={
+                "debian": ["android-studio"],
+                "ubuntu": ["android-studio"],
+                "arch": ["android-studio"],
+                "fedora": ["android-studio"],
+            },
+        ),
         "vim": Application(
             name="Vim",
             category=AppCategory.DEVELOPMENT,
@@ -124,6 +168,17 @@ class AppCenter:
                 "arch": ["vim"],
                 "fedora": ["vim-enhanced"],
                 "alpine": ["vim"],
+            },
+        ),
+        "neovim": Application(
+            name="Neovim",
+            category=AppCategory.DEVELOPMENT,
+            description="Hyperextensible Vim-based text editor",
+            packages={
+                "debian": ["neovim"],
+                "ubuntu": ["neovim"],
+                "arch": ["neovim"],
+                "fedora": ["neovim"],
             },
         ),
         "git": Application(
@@ -138,8 +193,41 @@ class AppCenter:
                 "alpine": ["git"],
             },
         ),
+        "docker": Application(
+            name="Docker",
+            category=AppCategory.DEVELOPMENT,
+            description="Container platform",
+            packages={
+                "debian": ["docker.io"],
+                "ubuntu": ["docker.io"],
+                "arch": ["docker"],
+                "fedora": ["docker"],
+            },
+        ),
+        "nodejs": Application(
+            name="Node.js",
+            category=AppCategory.DEVELOPMENT,
+            description="JavaScript runtime",
+            packages={
+                "debian": ["nodejs", "npm"],
+                "ubuntu": ["nodejs", "npm"],
+                "arch": ["nodejs", "npm"],
+                "fedora": ["nodejs", "npm"],
+            },
+        ),
+        "python3": Application(
+            name="Python 3",
+            category=AppCategory.DEVELOPMENT,
+            description="Python programming language",
+            packages={
+                "debian": ["python3", "python3-pip"],
+                "ubuntu": ["python3", "python3-pip"],
+                "arch": ["python", "python-pip"],
+                "fedora": ["python3", "python3-pip"],
+            },
+        ),
         
-        # Multimedia
+        # ===== MULTIMEDIA (原版支持) =====
         "mpv": Application(
             name="MPV",
             category=AppCategory.MULTIMEDIA,
@@ -152,6 +240,17 @@ class AppCenter:
                 "alpine": ["mpv"],
             },
         ),
+        "vlc": Application(
+            name="VLC",
+            category=AppCategory.MULTIMEDIA,
+            description="Popular media player",
+            packages={
+                "debian": ["vlc"],
+                "ubuntu": ["vlc"],
+                "arch": ["vlc"],
+                "fedora": ["vlc"],
+            },
+        ),
         "gimp": Application(
             name="GIMP",
             category=AppCategory.MULTIMEDIA,
@@ -161,6 +260,163 @@ class AppCenter:
                 "ubuntu": ["gimp"],
                 "arch": ["gimp"],
                 "fedora": ["gimp"],
+            },
+        ),
+        "audacity": Application(
+            name="Audacity",
+            category=AppCategory.MULTIMEDIA,
+            description="Audio editor",
+            packages={
+                "debian": ["audacity"],
+                "ubuntu": ["audacity"],
+                "arch": ["audacity"],
+                "fedora": ["audacity"],
+            },
+        ),
+        "spotify": Application(
+            name="Spotify",
+            category=AppCategory.MULTIMEDIA,
+            description="Music streaming service",
+            packages={
+                "debian": ["spotify-client"],
+                "ubuntu": ["spotify-client"],
+                "arch": ["spotify"],
+                "fedora": ["spotify-client"],
+            },
+        ),
+        "clementine": Application(
+            name="Clementine",
+            category=AppCategory.MULTIMEDIA,
+            description="Music player",
+            packages={
+                "debian": ["clementine"],
+                "ubuntu": ["clementine"],
+                "arch": ["clementine"],
+                "fedora": ["clementine"],
+            },
+        ),
+        
+        # ===== SOCIAL (原版支持QQ、微信等) =====
+        "linuxqq": Application(
+            name="Linux QQ",
+            category=AppCategory.SOCIAL,
+            description="QQ for Linux",
+            packages={
+                "debian": ["linuxqq"],
+                "ubuntu": ["linuxqq"],
+                "arch": ["linuxqq"],
+            },
+            external_url="https://im.qq.com/linuxqq",
+        ),
+        "wechat": Application(
+            name="WeChat",
+            category=AppCategory.SOCIAL,
+            description="WeChat for Linux (Electronic WeChat)",
+            packages={
+                "debian": ["electronic-wechat"],
+                "ubuntu": ["electronic-wechat"],
+                "arch": ["electronic-wechat"],
+            },
+        ),
+        "skype": Application(
+            name="Skype",
+            category=AppCategory.SOCIAL,
+            description="Video chat and messaging",
+            packages={
+                "debian": ["skypeforlinux"],
+                "ubuntu": ["skypeforlinux"],
+                "arch": ["skypeforlinux-stable-bin"],
+                "fedora": ["skypeforlinux"],
+            },
+        ),
+        "thunderbird": Application(
+            name="Thunderbird",
+            category=AppCategory.SOCIAL,
+            description="Email client",
+            packages={
+                "debian": ["thunderbird"],
+                "ubuntu": ["thunderbird"],
+                "arch": ["thunderbird"],
+                "fedora": ["thunderbird"],
+            },
+        ),
+        
+        # ===== GAMES (原版支持Steam等) =====
+        "steam": Application(
+            name="Steam",
+            category=AppCategory.GAME,
+            description="Game distribution platform",
+            packages={
+                "debian": ["steam"],
+                "ubuntu": ["steam"],
+                "arch": ["steam"],
+                "fedora": ["steam"],
+            },
+        ),
+        "kdegames": Application(
+            name="KDE Games",
+            category=AppCategory.GAME,
+            description="Collection of KDE games",
+            packages={
+                "debian": ["kdegames"],
+                "ubuntu": ["kdegames"],
+                "arch": ["kde-applications-meta"],
+                "fedora": ["kdegames"],
+            },
+        ),
+        "retroarch": Application(
+            name="RetroArch",
+            category=AppCategory.GAME,
+            description="Game emulator frontend",
+            packages={
+                "debian": ["retroarch"],
+                "ubuntu": ["retroarch"],
+                "arch": ["retroarch"],
+                "fedora": ["retroarch"],
+            },
+        ),
+        
+        # ===== UTILITIES (原版支持下载工具等) =====
+        "aria2": Application(
+            name="Aria2",
+            category=AppCategory.UTILITY,
+            description="Download utility",
+            packages={
+                "debian": ["aria2"],
+                "ubuntu": ["aria2"],
+                "arch": ["aria2"],
+                "fedora": ["aria2"],
+                "alpine": ["aria2"],
+            },
+        ),
+        "baidunetdisk": Application(
+            name="Baidu Netdisk",
+            category=AppCategory.UTILITY,
+            description="Baidu cloud storage",
+            packages={
+                "debian": ["baidunetdisk"],
+                "ubuntu": ["baidunetdisk"],
+                "arch": ["baidunetdisk"],
+            },
+        ),
+        "synaptic": Application(
+            name="Synaptic",
+            category=AppCategory.UTILITY,
+            description="Package manager GUI",
+            packages={
+                "debian": ["synaptic"],
+                "ubuntu": ["synaptic"],
+            },
+        ),
+        "bleachbit": Application(
+            name="BleachBit",
+            category=AppCategory.UTILITY,
+            description="System cleaner",
+            packages={
+                "debian": ["bleachbit"],
+                "ubuntu": ["bleachbit"],
+                "arch": ["bleachbit"],
+                "fedora": ["bleachbit"],
             },
         ),
     }
@@ -184,12 +440,16 @@ class AppCenter:
         self,
         app_name: str,
         distro: str | None = None,
+        container_name: str | None = None,
+        backend = None,
     ) -> bool:
         """Install an application.
         
         Args:
             app_name: Application name.
             distro: Target distribution (auto-detected if None).
+            container_name: Optional container name to install in.
+            backend: Optional container backend for container installation.
             
         Returns:
             True if installation succeeded.
@@ -204,8 +464,13 @@ class AppCenter:
         if not packages:
             raise RuntimeError(f"Application '{app_name}' not available for {distro}")
         
-        # Install using package manager
-        return await self._install_packages(distro, packages)
+        # Install using package manager (in container if specified)
+        if container_name and backend and hasattr(backend, 'exec'):
+            return await self._install_packages_in_container(
+                distro, packages, container_name, backend
+            )
+        else:
+            return await self._install_packages(distro, packages)
     
     async def install_browser(self, browser: str) -> bool:
         """Install a web browser."""
@@ -256,6 +521,34 @@ class AppCenter:
         if proc.returncode != 0:
             error = stderr.decode("utf-8", errors="replace")
             raise RuntimeError(f"Installation failed: {error}")
+        
+        return True
+    
+    async def _install_packages_in_container(
+        self,
+        distro: str,
+        packages: list[str],
+        container_name: str,
+        backend,
+    ) -> bool:
+        """Install packages inside a container.
+        
+        Args:
+            distro: Distribution name
+            packages: List of packages to install
+            container_name: Container name
+            backend: Container backend
+            
+        Returns:
+            True if installation succeeded
+        """
+        cmd = self._get_install_command(distro, packages)
+        
+        # Execute in container
+        exit_code, stdout, stderr = await backend.exec(container_name, cmd)
+        
+        if exit_code != 0:
+            raise RuntimeError(f"Installation failed in container: {stderr}")
         
         return True
     

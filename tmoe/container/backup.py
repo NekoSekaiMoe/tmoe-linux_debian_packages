@@ -1,342 +1,293 @@
-"""Container backup and restore for TMOE.
+"""Backup and restore functionality for TMOE containers.
 
-Provides backup and restore functionality for containers using tar archives.
+This module provides backup and restore functionality for containers,
+matching the original TMOE shell implementation.
 """
 
 from __future__ import annotations
 
 import asyncio
-import gzip
-import lzma
-import shutil
-import tarfile
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
+
+from tmoe.core.config import get_config
+from tmoe.core.platform import PlatformInfo
 
 if TYPE_CHECKING:
-    from tmoe.container.base import ContainerInfo, ContainerBackend
+    from tmoe.container.base import ContainerBackend
 
 
 @dataclass
 class BackupInfo:
-    """Backup information."""
-    path: Path
+    """Information about a backup."""
     name: str
     container_name: str
+    container_type: str
+    distro: str
+    arch: str
+    size: int
     created_at: datetime
-    size_bytes: int
-    compression: str
+    compression: str  # "zst" or "xz"
+    path: Path
+
+
+class BackupManager:
+    """Manager for container backup and restore.
     
-    @property
-    def size_human(self) -> str:
-        """Human-readable size."""
-        size = self.size_bytes
+    Provides functionality to:
+    - Create compressed backups of containers
+    - Restore containers from backups
+    - List available backups
+    - Clean up before backup (remove cache, logs, etc.)
+    
+    Example:
+        >>> manager = BackupManager()
+        >>> backup_path = await manager.backup_container("my-debian")
+        >>> await manager.restore_container(backup_path)
+    """
+    
+    def __init__(self, platform: PlatformInfo | None = None) -> None:
+        self.platform = platform or PlatformInfo()
+        self.config = get_config()
+        self._backup_dir = self.platform.data_dir / "backups"
+        self._backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _get_backup_path(
+        self,
+        container_name: str,
+        compression: str = "zst",
+    ) -> Path:
+        """Generate backup file path."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{container_name}_{timestamp}_rootfs_bak.tar.{compression}"
+        return self._backup_dir / filename
+    
+    async def _clean_container_before_backup(self, rootfs_path: Path) -> None:
+        """Clean up container before backup (原版清理逻辑)."""
+        if not rootfs_path.exists():
+            return
+        
+        cleanup_commands = [
+            # Clean APT cache
+            ["rm", "-rf", str(rootfs_path / "var" / "cache" / "apt" / "archives" / "*")],
+            ["rm", "-rf", str(rootfs_path / "var" / "lib" / "apt" / "lists" / "*")],
+            # Clean temporary files
+            ["rm", "-rf", str(rootfs_path / "tmp" / "*")],
+            ["rm", "-rf", str(rootfs_path / "var" / "tmp" / "*")],
+            # Clean command history
+            ["rm", "-f", str(rootfs_path / "root" / ".bash_history")],
+            ["rm", "-f", str(rootfs_path / "root" / ".zsh_history")],
+        ]
+        
+        for cmd in cleanup_commands:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+            except Exception:
+                pass
+    
+    async def backup_container(
+        self,
+        container_name: str,
+        backend: ContainerBackend,
+        compression: str = "zst",
+        clean_first: bool = True,
+    ) -> BackupInfo:
+        """Create a backup of a container (原版备份逻辑)."""
+        info = await backend.get_info(container_name)
+        if not info:
+            raise ValueError(f"Container '{container_name}' not found")
+        
+        config = info.config
+        rootfs_path = config.rootfs_path
+        
+        if not rootfs_path or not rootfs_path.exists():
+            raise ValueError(f"Container '{container_name}' rootfs not found")
+        
+        if clean_first:
+            await self._clean_container_before_backup(rootfs_path)
+        
+        backup_path = self._get_backup_path(container_name, compression)
+        
+        # Create backup
+        if compression == "zst":
+            cmd = [
+                "tar", "--use-compress-program", "zstd",
+                "-Ppcvf", str(backup_path),
+                "--exclude", str(rootfs_path / "media" / "sd"),
+                "--exclude", str(rootfs_path / "media" / "tf"),
+                str(rootfs_path),
+            ]
+        else:
+            cmd = [
+                "tar", "-PJpcvf", str(backup_path),
+                "--exclude", str(rootfs_path / "media" / "sd"),
+                "--exclude", str(rootfs_path / "media" / "tf"),
+                str(rootfs_path),
+            ]
+        
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        
+        stdout, stderr = await proc.communicate()
+        
+        if proc.returncode != 0:
+            raise RuntimeError(f"Backup failed: {stderr.decode()}")
+        
+        size = backup_path.stat().st_size
+        
+        backup_info = BackupInfo(
+            name=backup_path.stem,
+            container_name=container_name,
+            container_type=config.container_type,
+            distro=config.distro,
+            arch=config.arch,
+            size=size,
+            created_at=datetime.now(),
+            compression=compression,
+            path=backup_path,
+        )
+        
+        await self._save_backup_metadata(backup_info)
+        
+        return backup_info
+    
+    async def _save_backup_metadata(self, backup_info: BackupInfo) -> None:
+        """Save backup metadata to JSON file."""
+        metadata_path = backup_info.path.with_suffix(".json")
+        metadata = {
+            "name": backup_info.name,
+            "container_name": backup_info.container_name,
+            "container_type": backup_info.container_type,
+            "distro": backup_info.distro,
+            "arch": backup_info.arch,
+            "size": backup_info.size,
+            "created_at": backup_info.created_at.isoformat(),
+            "compression": backup_info.compression,
+        }
+        metadata_path.write_text(json.dumps(metadata, indent=2))
+    
+    async def restore_container(
+        self,
+        backup_path: Path,
+        backend: ContainerBackend,
+        new_name: str | None = None,
+    ) -> str:
+        """Restore a container from backup (原版恢复逻辑)."""
+        if not backup_path.exists():
+            raise ValueError(f"Backup file not found: {backup_path}")
+        
+        metadata_path = backup_path.with_suffix(".json")
+        if metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text())
+            container_name = new_name or metadata["container_name"]
+            container_type = metadata["container_type"]
+            distro = metadata["distro"]
+            arch = metadata["arch"]
+        else:
+            container_name = new_name or backup_path.stem.split("_")[0]
+            container_type = "proot"
+            distro = "debian"
+            arch = self.platform.normalized_arch
+        
+        if await backend.exists(container_name):
+            raise ValueError(f"Container '{container_name}' already exists")
+        
+        container_path = backend.get_container_path(container_name)
+        container_path.mkdir(parents=True, exist_ok=True)
+        
+        compression = backup_path.suffix.replace(".", "")
+        
+        if compression == "zst":
+            cmd = [
+                "tar", "--use-compress-program", "zstd",
+                "-Ppxvf", str(backup_path),
+                "-C", str(container_path.parent),
+            ]
+        elif compression in ("xz", "gz"):
+            cmd = [
+                "tar", f"-Pp{compression[0]}vf", str(backup_path),
+                "-C", str(container_path.parent),
+            ]
+        else:
+            raise ValueError(f"Unsupported compression: {compression}")
+        
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        
+        stdout, stderr = await proc.communicate()
+        
+        if proc.returncode != 0:
+            raise RuntimeError(f"Restore failed: {stderr.decode()}")
+        
+        from tmoe.core.config import ContainerConfig
+        
+        config = ContainerConfig(
+            name=container_name,
+            distro=distro,
+            arch=arch,
+            rootfs_path=container_path,
+            container_type=container_type,
+        )
+        
+        backend.save_container_config(config)
+        
+        return container_name
+    
+    def list_backups(self) -> list[BackupInfo]:
+        """List available backups."""
+        backups: list[BackupInfo] = []
+        
+        for backup_file in self._backup_dir.glob("*.tar.*"):
+            metadata_path = backup_file.with_suffix(".json")
+            
+            if metadata_path.exists():
+                try:
+                    metadata = json.loads(metadata_path.read_text())
+                    backups.append(BackupInfo(
+                        name=metadata["name"],
+                        container_name=metadata["container_name"],
+                        container_type=metadata["container_type"],
+                        distro=metadata["distro"],
+                        arch=metadata["arch"],
+                        size=metadata["size"],
+                        created_at=datetime.fromisoformat(metadata["created_at"]),
+                        compression=metadata["compression"],
+                        path=backup_file,
+                    ))
+                except Exception:
+                    pass
+        
+        backups.sort(key=lambda x: x.created_at, reverse=True)
+        return backups
+    
+    async def delete_backup(self, backup_path: Path) -> bool:
+        """Delete a backup."""
+        try:
+            backup_path.unlink(missing_ok=True)
+            metadata_path = backup_path.with_suffix(".json")
+            metadata_path.unlink(missing_ok=True)
+            return True
+        except Exception:
+            return False
+    
+    def format_size(self, size: int) -> str:
+        """Format size in human readable format."""
         for unit in ["B", "KB", "MB", "GB", "TB"]:
             if size < 1024:
                 return f"{size:.1f} {unit}"
             size /= 1024
         return f"{size:.1f} PB"
-
-
-class ContainerBackupManager:
-    """Manager for container backup and restore.
-    
-    Creates compressed tar archives of container rootfs.
-    Supports multiple compression formats.
-    
-    Example:
-        >>> manager = ContainerBackupManager(backend)
-        >>> backup = await manager.backup_container("my-container")
-        >>> await manager.restore_container(backup.path, "restored-container")
-    """
-    
-    def __init__(
-        self,
-        backend: ContainerBackend,
-        backup_dir: Path | None = None,
-    ) -> None:
-        self.backend = backend
-        
-        if backup_dir is None:
-            from tmoe.core.platform import PlatformInfo
-            platform = PlatformInfo()
-            self.backup_dir = platform.data_dir / "backups"
-        else:
-            self.backup_dir = backup_dir
-        
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
-        self._progress_callback: Callable[[str, int, int], None] | None = None
-    
-    def set_progress_callback(
-        self,
-        callback: Callable[[str, int, int], None],
-    ) -> None:
-        """Set callback for progress updates."""
-        self._progress_callback = callback
-    
-    def _report_progress(self, message: str, current: int, total: int) -> None:
-        """Report progress."""
-        if self._progress_callback:
-            self._progress_callback(message, current, total)
-    
-    def _generate_backup_name(self, container_name: str) -> str:
-        """Generate backup file name."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return f"{container_name}_{timestamp}"
-    
-    async def backup_container(
-        self,
-        container_name: str,
-        compression: str = "xz",
-    ) -> BackupInfo:
-        """Create a backup of a container.
-        
-        Args:
-            container_name: Name of container to backup
-            compression: Compression type ('xz', 'gz', 'bz2', 'none')
-            
-        Returns:
-            Backup info
-        """
-        # Get container info
-        info = await self.backend.get_info(container_name)
-        if not info:
-            raise ValueError(f"Container '{container_name}' not found")
-        
-        if not info.config.rootfs_path:
-            raise ValueError(f"Container '{container_name}' has no rootfs")
-        
-        rootfs_path = info.config.rootfs_path
-        
-        # Check if container is running
-        if info.status.name == "RUNNING":
-            raise RuntimeError(
-                f"Container '{container_name}' is running. "
-                "Please stop it before backup."
-            )
-        
-        # Generate backup filename
-        backup_name = self._generate_backup_name(container_name)
-        
-        # Determine file extension
-        ext_map = {
-            "xz": ".tar.xz",
-            "gz": ".tar.gz",
-            "bz2": ".tar.bz2",
-            "none": ".tar",
-        }
-        ext = ext_map.get(compression, ".tar.xz")
-        backup_path = self.backup_dir / f"{backup_name}{ext}"
-        
-        self._report_progress(f"Creating backup of {container_name}...", 0, 0)
-        
-        # Create tar archive
-        await self._create_tar_archive(
-            rootfs_path,
-            backup_path,
-            compression,
-        )
-        
-        # Get backup size
-        size = backup_path.stat().st_size
-        
-        self._report_progress(f"Backup created: {backup_path.name}", size, size)
-        
-        return BackupInfo(
-            path=backup_path,
-            name=backup_path.name,
-            container_name=container_name,
-            created_at=datetime.now(),
-            size_bytes=size,
-            compression=compression,
-        )
-    
-    async def _create_tar_archive(
-        self,
-        source_path: Path,
-        dest_path: Path,
-        compression: str,
-    ) -> None:
-        """Create compressed tar archive.
-        
-        Args:
-            source_path: Path to archive
-            dest_path: Destination tar file
-            compression: Compression type
-        """
-        # Map compression types to tarfile modes
-        mode_map = {
-            "xz": "w:xz",
-            "gz": "w:gz",
-            "bz2": "w:bz2",
-            "none": "w",
-        }
-        mode = mode_map.get(compression, "w:xz")
-        
-        # Get total file count for progress
-        total_files = sum(1 for _ in source_path.rglob("*") if _.is_file())
-        processed = 0
-        
-        def progress_filter(member: tarfile.TarInfo) -> tarfile.TarInfo:
-            nonlocal processed
-            processed += 1
-            if processed % 100 == 0:
-                self._report_progress(
-                    f"Archiving files...",
-                    processed,
-                    total_files,
-                )
-            return member
-        
-        # Create tar archive
-        with tarfile.open(dest_path, mode) as tar:
-            tar.add(source_path, arcname="rootfs", filter=progress_filter)
-    
-    async def restore_container(
-        self,
-        backup_path: Path,
-        new_name: str | None = None,
-    ) -> Path:
-        """Restore a container from backup.
-        
-        Args:
-            backup_path: Path to backup file
-            new_name: New container name (default: original name)
-            
-        Returns:
-            Path to restored container rootfs
-        """
-        if not backup_path.exists():
-            raise FileNotFoundError(f"Backup not found: {backup_path}")
-        
-        # Determine container name from backup filename
-        if new_name is None:
-            # Extract name from backup_20240101_120000.tar.xz
-            new_name = backup_path.stem.split("_")[0]
-        
-        # Check if container already exists
-        if await self.backend.exists(new_name):
-            raise ValueError(f"Container '{new_name}' already exists")
-        
-        # Get container path
-        rootfs_path = self.backend.get_container_path(new_name)
-        
-        if rootfs_path.exists():
-            raise ValueError(f"Path already exists: {rootfs_path}")
-        
-        self._report_progress(f"Restoring {new_name}...", 0, 0)
-        
-        # Extract tar archive
-        await self._extract_tar_archive(backup_path, rootfs_path)
-        
-        self._report_progress(f"Restored {new_name}", 100, 100)
-        
-        return rootfs_path
-    
-    async def _extract_tar_archive(
-        self,
-        tar_path: Path,
-        dest_path: Path,
-    ) -> None:
-        """Extract tar archive.
-        
-        Args:
-            tar_path: Path to tar file
-            dest_path: Destination directory
-        """
-        dest_path.mkdir(parents=True, exist_ok=True)
-        
-        # Detect compression from extension
-        if tar_path.suffix == ".xz" or tar_path.name.endswith(".tar.xz"):
-            mode = "r:xz"
-        elif tar_path.suffix == ".gz" or tar_path.name.endswith(".tar.gz"):
-            mode = "r:gz"
-        elif tar_path.suffix == ".bz2" or tar_path.name.endswith(".tar.bz2"):
-            mode = "r:bz2"
-        else:
-            mode = "r"
-        
-        with tarfile.open(tar_path, mode) as tar:
-            # Filter for security (Python 3.12+)
-            if hasattr(tarfile, 'data_filter'):
-                tar.extraction_filter = getattr(tarfile, 'data_filter', None)
-            tar.extractall(path=dest_path.parent)
-            
-            # If extracted as 'rootfs' directory, rename to container name
-            rootfs_dir = dest_path.parent / "rootfs"
-            if rootfs_dir.exists() and not dest_path.exists():
-                rootfs_dir.rename(dest_path)
-    
-    def list_backups(self, container_name: str | None = None) -> list[BackupInfo]:
-        """List available backups.
-        
-        Args:
-            container_name: Filter by container name (optional)
-            
-        Returns:
-            List of backup info
-        """
-        backups = []
-        
-        for backup_file in self.backup_dir.iterdir():
-            if not backup_file.is_file():
-                continue
-            
-            # Parse filename
-            name = backup_file.stem
-            if container_name and not name.startswith(container_name):
-                continue
-            
-            # Try to parse timestamp
-            try:
-                # Format: container_20240101_120000
-                parts = name.split("_")
-                if len(parts) >= 3:
-                    container = parts[0]
-                    timestamp = datetime.strptime(
-                        f"{parts[1]}_{parts[2]}",
-                        "%Y%m%d_%H%M%S"
-                    )
-                else:
-                    container = name
-                    timestamp = datetime.fromtimestamp(
-                        backup_file.stat().st_mtime
-                    )
-            except ValueError:
-                container = name
-                timestamp = datetime.fromtimestamp(
-                    backup_file.stat().st_mtime
-                )
-            
-            # Determine compression
-            if backup_file.name.endswith(".tar.xz"):
-                compression = "xz"
-            elif backup_file.name.endswith(".tar.gz"):
-                compression = "gz"
-            elif backup_file.name.endswith(".tar.bz2"):
-                compression = "bz2"
-            else:
-                compression = "none"
-            
-            backups.append(BackupInfo(
-                path=backup_file,
-                name=backup_file.name,
-                container_name=container,
-                created_at=timestamp,
-                size_bytes=backup_file.stat().st_size,
-                compression=compression,
-            ))
-        
-        # Sort by creation time (newest first)
-        return sorted(backups, key=lambda x: x.created_at, reverse=True)
-    
-    async def delete_backup(self, backup_path: Path) -> None:
-        """Delete a backup.
-        
-        Args:
-            backup_path: Path to backup file
-        """
-        if backup_path.exists():
-            backup_path.unlink()

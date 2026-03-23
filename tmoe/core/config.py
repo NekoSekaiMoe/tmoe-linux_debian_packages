@@ -48,11 +48,31 @@ class ContainerConfig:
     mount_apex: bool = True
     custom_mounts: list[dict[str, str]] = field(default_factory=list)
     
-    # Feature flags
+    # Feature flags (原版支持的高级配置)
     link2symlink: bool = True
     sysvipc: bool = True
     kill_on_exit: bool = True
     fake_kernel: bool = True
+    fake_kernel_version: str = "6.1.0-tmoe"
+    fix_lowercase: bool = True  # -L flag for case-insensitive filesystem
+    
+    # QEMU cross-architecture support
+    qemu_enabled: bool = False
+    qemu_arch: str | None = None
+    qemu_bin: str | None = None
+    
+    # Proot binary settings (原版支持自定义proot路径)
+    proot_bin: str = "proot"  # default, 32, compatible
+    
+    # User/identity settings
+    fix_id: bool = True  # 修复 uid/gid
+    fake_id: str | None = None  # 伪装用户ID
+    
+    # Network settings
+    isolated_network: bool = False
+    
+    # .Net 6+ compatible mode
+    dotnet_compatible: bool = False
     
     def __post_init__(self) -> None:
         """Validate architecture."""
@@ -86,6 +106,16 @@ class ContainerConfig:
             "sysvipc": self.sysvipc,
             "kill_on_exit": self.kill_on_exit,
             "fake_kernel": self.fake_kernel,
+            "fake_kernel_version": self.fake_kernel_version,
+            "fix_lowercase": self.fix_lowercase,
+            "qemu_enabled": self.qemu_enabled,
+            "qemu_arch": self.qemu_arch,
+            "qemu_bin": self.qemu_bin,
+            "proot_bin": self.proot_bin,
+            "fix_id": self.fix_id,
+            "fake_id": self.fake_id,
+            "isolated_network": self.isolated_network,
+            "dotnet_compatible": self.dotnet_compatible,
         }
     
     @classmethod

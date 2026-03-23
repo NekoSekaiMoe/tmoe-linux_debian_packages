@@ -27,10 +27,13 @@ from textual.widgets import (
 from tmoe.core.config import get_config
 from tmoe.core.platform import get_platform_info
 from tmoe.tui.screens.proot_menu import ProotMenuScreen
+from tmoe.tui.screens.chroot_menu import ChrootMenuScreen
+from tmoe.tui.screens.gui_menu import GUIMenuScreen
 from tmoe.tui.screens.container_list import ContainerListScreen
 from tmoe.tui.screens.create_container import CreateContainerScreen
 from tmoe.tui.screens.container_manager import ContainerManagerScreen
 from tmoe.tui.screens.mirror_manager import MirrorManagerScreen
+from tmoe.tui.screens.tools_menu import ToolsMenuScreen
 from tmoe.tui.screens.app_installer import AppInstallerScreen
 from tmoe.tui.screens.settings import SettingsScreen
 from tmoe.tui.screens.backup_manager import BackupManagerScreen
@@ -261,10 +264,10 @@ class TmoeApp(App):
     SCREENS = {
         "main": MainMenuScreen,
         "proot_menu": ProotMenuScreen,
-        "chroot_menu": lambda: PlaceholderScreen("chroot_menu", "🔒 Chroot 容器管理\n\n功能开发中..."),
-        "gui_menu": lambda: PlaceholderScreen("gui_menu", "🖥️ GUI/远程桌面\n\n功能开发中..."),
+        "chroot_menu": ChrootMenuScreen,
+        "gui_menu": GUIMenuScreen,
         "apps_menu": AppInstallerScreen,
-        "tools_menu": MirrorManagerScreen,
+        "tools_menu": ToolsMenuScreen,
         "container_list": ContainerListScreen,
         "create_container": CreateContainerScreen,
         "container_manager": ContainerManagerScreen,

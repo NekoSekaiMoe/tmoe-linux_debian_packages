@@ -22,13 +22,19 @@ if TYPE_CHECKING:
 
 @dataclass
 class VncConfig:
-    """VNC configuration."""
-    server: str = "tiger"
+    """VNC configuration (原版配置项)."""
+    server: str = "tiger"  # tiger or tight
     resolution: str = "1440x720"
-    display: int = 2
-    depth: int = 24
-    localhost: bool = False
+    display: int = 2  # 显示编号，端口 = 5900 + display
+    depth: int = 24  # 色彩深度: 16, 24, 32
+    localhost: bool = False  # 仅允许本地连接
     password: str | None = None
+    zlib_level: int = 0  # 压缩级别 0-9
+    always_shared: bool = True  # 总是共享连接
+    auto_start_dbus: bool = True  # 自动启动 dbus
+    auto_stop_vnc: bool = True  # 启动前停止已有 VNC
+    vnc_user: str | None = None  # VNC 运行用户
+    desktop_name: str | None = None  # 桌面名称
 
 
 class VncManager:
@@ -209,3 +215,203 @@ class VncManager:
         self.config.vnc_depth = self._vnc_config.depth
         self.config.vnc_localhost = self._vnc_config.localhost
         self.config.save()
+
+    async def set_password(self, password: str) -> None:
+        """Set VNC password (原版 vncpasswd 功能).
+        
+        Args:
+            password: VNC password (max 8 characters for standard VNC)
+        """
+        # Create .vnc directory
+        vnc_dir = Path.home() / ".vnc"
+        vnc_dir.mkdir(parents=True, exist_ok=True)
+        
+        passwd_file = vnc_dir / "passwd"
+        
+        # Use vncpasswd command if available
+        vncpasswd_bin = shutil.which("vncpasswd")
+        if vncpasswd_bin:
+            # Write password to stdin of vncpasswd
+            proc = await asyncio.create_subprocess_exec(
+                vncpasswd_bin,
+                str(passwd_file),
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            # Send password twice (for confirmation)
+            input_data = f"{password}\n{password}\n".encode()
+            await proc.communicate(input=input_data)
+        else:
+            # Fallback: store password in file (less secure, for demo only)
+            # In production, should use proper VNC password encryption
+            import base64
+            encoded = base64.b64encode(password.encode()).decode()
+            passwd_file.write_text(encoded)
+            passwd_file.chmod(0o600)
+        
+        self._vnc_config.password = password
+    
+    def generate_start_script(
+        self,
+        container_name: str | None = None,
+        desktop: str = "xfce",
+    ) -> str:
+        """Generate VNC startup script (原版 startvnc 脚本格式).
+        
+        Args:
+            container_name: Optional container name for container-specific script
+            desktop: Desktop environment to start
+            
+        Returns:
+            Shell script content
+        """
+        display = self._vnc_config.display
+        port = 5900 + display
+        resolution = self._vnc_config.resolution
+        depth = self._vnc_config.depth
+        
+        script = f'''#!/bin/bash
+# TMOE VNC Startup Script
+# Generated automatically - do not edit manually
+
+# PulseAudio settings
+export PULSE_SERVER=${{PULSE_SERVER:-127.0.0.1}}
+
+# VNC configuration
+VNC_RESOLUTION="{resolution}"
+VNC_DISPLAY={display}
+RFB_PORT={port}
+VNC_USER=$(id -un)
+VNC_LOCALHOST={'true' if self._vnc_config.localhost else 'false'}
+VNC_SERVER={self._vnc_config.server}
+ZLIB_LEVEL={self._vnc_config.zlib_level}
+PIXEL_DEPTH={depth}
+ALWAYS_SHARED={'true' if self._vnc_config.always_shared else 'false'}
+AUTO_START_DBUS={'true' if self._vnc_config.auto_start_dbus else 'false'}
+AUTO_STOP_VNC={'true' if self._vnc_config.auto_stop_vnc else 'false'}
+
+# Display settings
+unset WAYLAND_DISPLAY
+export DISPLAY=:{display}
+
+# VNC files
+VNC_LOG_FILE=$HOME/.vnc/vnc.log
+TMOE_VNC_PASSWD_FILE="$HOME/.vnc/passwd"
+XSESSION_FILE="/etc/X11/xinit/Xsession"
+
+# Colors for output
+RED='\\033[31m'
+GREEN='\\033[32m'
+YELLOW='\\033[33m'
+BLUE='\\033[34m'
+RESET='\\033[m'
+
+echo -e "${{GREEN}}Starting ${{YELLOW}}vnc server${{RESET}} ..."
+echo -e "VNC port is ${{YELLOW}}${{RFB_PORT}}${{RESET}}, address is ${{GREEN}}localhost${{YELLOW}}:${{RFB_PORT}}${{RESET}}"
+
+# Auto stop existing VNC
+if [ "$AUTO_STOP_VNC" = "true" ]; then
+    vncserver -kill :{display} 2>/dev/null || true
+fi
+
+# Start dbus if needed
+if [ "$AUTO_START_DBUS" = "true" ]; then
+    if command -v dbus-launch &> /dev/null; then
+        eval $(dbus-launch --sh-syntax --exit-with-session)
+    fi
+fi
+
+# Start VNC server
+if [ "$VNC_SERVER" = "tiger" ]; then
+    Xtigervnc :{display} \\
+        -geometry "$VNC_RESOLUTION" \\
+        -depth "$PIXEL_DEPTH" \\
+        -ZlibLevel="$ZLIB_LEVEL" \\
+        -pn \\
+        {'-localhost yes' if self._vnc_config.localhost else '-localhost no'} \\
+        -rfbauth "$TMOE_VNC_PASSWD_FILE" \\
+        -desktop "tmoe_{desktop}_desktop" &
+else
+    tightvncserver :{display} \\
+        -geometry "$VNC_RESOLUTION" \\
+        -depth "$PIXEL_DEPTH" \\
+        {'-localhost' if self._vnc_config.localhost else ''} &
+fi
+
+VNC_PID=$!
+echo $VNC_PID > "$HOME/.vnc/{container_name or 'default'}_{display}.pid"
+
+# Wait for VNC to start
+sleep 2
+
+# Start desktop session
+if [ -f "$XSESSION_FILE" ]; then
+    bash "$XSESSION_FILE" &
+else
+    # Fallback: try to start desktop directly
+    case "{desktop}" in
+        xfce) startxfce4 & ;;
+        lxde) startlxde & ;;
+        lxqt) startlxqt & ;;
+        mate) mate-session & ;;
+        kde|plasma) startplasma-x11 & ;;
+        gnome) gnome-session & ;;
+        cinnamon) cinnamon-session & ;;
+    esac
+fi
+
+echo -e "${{GREEN}}VNC server started on port ${{YELLOW}}${{RFB_PORT}}${{RESET}}"
+echo -e "Access with: vncviewer localhost:${{RFB_PORT}}"
+'''
+        return script
+    
+    async def install_vnc_server(self, server_type: str = "tiger") -> bool:
+        """Install VNC server package.
+        
+        Args:
+            server_type: 'tiger' or 'tight'
+            
+        Returns:
+            True if installation succeeded
+        """
+        try:
+            # Detect distribution
+            distro = "debian"
+            if os.path.exists("/etc/os-release"):
+                with open("/etc/os-release") as f:
+                    content = f.read().lower()
+                    if "arch" in content:
+                        distro = "arch"
+                    elif "fedora" in content:
+                        distro = "fedora"
+                    elif "alpine" in content:
+                        distro = "alpine"
+            
+            if server_type == "tiger":
+                packages = ["tigervnc-standalone-server", "tigervnc-viewer"]
+            else:
+                packages = ["tightvncserver"]
+            
+            match distro:
+                case "debian" | "ubuntu":
+                    cmd = ["apt", "install", "-y"] + packages
+                case "arch":
+                    cmd = ["pacman", "-S", "--noconfirm", "tigervnc"]
+                case "fedora":
+                    cmd = ["dnf", "install", "-y", "tigervnc-server"]
+                case "alpine":
+                    cmd = ["apk", "add", "tigervnc"]
+                case _:
+                    return False
+            
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await proc.wait()
+            return proc.returncode == 0
+            
+        except Exception:
+            return False

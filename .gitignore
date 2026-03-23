@@ -4,3 +4,5 @@ build/
 dist/
 *.pyc
 tmoe.egg-info/
+original/
+example/

@@ -39,12 +39,46 @@ class ChrootBackend(ContainerBackend):
         >>> await backend.start("my-debian")
     """
     
-    # Required mount points for chroot
+    # Required mount points for chroot (原版挂载点)
     REQUIRED_MOUNTS = ["proc", "sys", "dev", "dev/pts", "dev/shm"]
     
     def __init__(self, platform: PlatformInfo | None = None) -> None:
         super().__init__(platform)
-        self._active_mounts: dict[str, list[str]] = {}
+        self._mounts_file = self.platform.config_dir / "chroot_mounts.json"
+    
+    def _load_mounts_state(self) -> dict[str, list[str]]:
+        """Load mounts state from file (持久化挂载状态)."""
+        import json
+        if self._mounts_file.exists():
+            try:
+                return json.loads(self._mounts_file.read_text())
+            except Exception:
+                pass
+        return {}
+    
+    def _save_mounts_state(self, state: dict[str, list[str]]) -> None:
+        """Save mounts state to file (持久化挂载状态)."""
+        import json
+        self._mounts_file.parent.mkdir(parents=True, exist_ok=True)
+        self._mounts_file.write_text(json.dumps(state, indent=2))
+    
+    def _get_container_mounts(self, name: str) -> list[str]:
+        """Get active mounts for a container."""
+        state = self._load_mounts_state()
+        return state.get(name, [])
+    
+    def _set_container_mounts(self, name: str, mounts: list[str]) -> None:
+        """Set active mounts for a container."""
+        state = self._load_mounts_state()
+        state[name] = mounts
+        self._save_mounts_state(state)
+    
+    def _clear_container_mounts(self, name: str) -> None:
+        """Clear mounts for a container."""
+        state = self._load_mounts_state()
+        if name in state:
+            del state[name]
+            self._save_mounts_state(state)
     
     @property
     def backend_type(self) -> str:
@@ -159,60 +193,78 @@ class ChrootBackend(ContainerBackend):
         return config
     
     async def _setup_mounts(self, config: ContainerConfig) -> None:
-        """Setup required mounts for chroot."""
+        """Setup required mounts for chroot (原版挂载逻辑)."""
         if config.rootfs_path is None:
             raise ValueError("Container rootfs path not set")
         
         rootfs = config.rootfs_path
         mounts: list[str] = []
         
-        # Mount proc
+        # 1. Mount rootfs itself with rbind (原版: mount --rbind rootfs rootfs)
+        await self._run_cmd(["mount", "--rbind", str(rootfs), str(rootfs)])
+        await self._run_cmd([
+            "mount", "-o", "remount,exec,suid,relatime,dev",
+            str(rootfs)
+        ])
+        mounts.append(str(rootfs))
+        
+        # 2. Mount dev (原版: mount -o bind /dev rootfs/dev)
+        dev_path = rootfs / "dev"
+        dev_path.mkdir(parents=True, exist_ok=True)
+        await self._run_cmd(["mount", "-o", "bind", "/dev", str(dev_path)])
+        mounts.append(str(dev_path))
+        
+        # 3. Mount proc (原版: mount -t proc proc rootfs/proc)
         proc_path = rootfs / "proc"
         proc_path.mkdir(parents=True, exist_ok=True)
         await self._run_cmd(["mount", "-t", "proc", "proc", str(proc_path)])
         mounts.append(str(proc_path))
         
-        # Mount sys
+        # 4. Mount sys (原版: mount -t sysfs sysfs rootfs/sys)
         sys_path = rootfs / "sys"
         sys_path.mkdir(parents=True, exist_ok=True)
-        await self._run_cmd(["mount", "--rbind", "/sys", str(sys_path)])
+        await self._run_cmd(["mount", "-t", "sysfs", "sysfs", str(sys_path)])
         mounts.append(str(sys_path))
         
-        # Mount dev
-        dev_path = rootfs / "dev"
-        dev_path.mkdir(parents=True, exist_ok=True)
-        await self._run_cmd(["mount", "--rbind", "/dev", str(dev_path)])
-        mounts.append(str(dev_path))
-        
-        # Mount devpts
+        # 5. Mount devpts (原版: mount -t devpts devpts rootfs/dev/pts)
         pts_path = rootfs / "dev" / "pts"
         pts_path.mkdir(parents=True, exist_ok=True)
         await self._run_cmd(["mount", "-t", "devpts", "devpts", str(pts_path)])
         mounts.append(str(pts_path))
         
-        # Mount shm
+        # 6. Mount shm (原版: mount -t tmpfs tmpfs rootfs/dev/shm)
         shm_path = rootfs / "dev" / "shm"
         shm_path.mkdir(parents=True, exist_ok=True)
         await self._run_cmd(["mount", "-t", "tmpfs", "tmpfs", str(shm_path)])
         mounts.append(str(shm_path))
         
-        self._active_mounts[config.name] = mounts
+        # 7. Additional mounts (原版支持)
+        # Mount /dev/pts/ptmx for pseudo-terminal support
+        ptmx_path = rootfs / "dev" / "ptmx"
+        if not ptmx_path.exists():
+            # Create symlink to /dev/pts/ptmx
+            pass  # Will be handled by devpts mount
+        
+        # Save mounts state (持久化)
+        self._set_container_mounts(config.name, mounts)
     
     async def _cleanup_mounts(self, config: ContainerConfig) -> None:
-        """Cleanup mounts for chroot."""
+        """Cleanup mounts for chroot (原版卸载顺序)."""
         if config.rootfs_path is None:
             return
         
-        # Unmount in reverse order
-        mounts = self._active_mounts.get(config.name, [])
+        # Get mounts from persistent state
+        mounts = self._get_container_mounts(config.name)
+        
+        # Unmount in reverse order (important!)
         for mount_point in reversed(mounts):
             try:
                 await self._run_cmd(["umount", "-l", mount_point])
             except Exception:
                 pass
         
-        if config.name in self._active_mounts:
-            del self._active_mounts[config.name]
+        # Clear mounts state
+        self._clear_container_mounts(config.name)
     
     async def start(
         self,
@@ -338,19 +390,95 @@ class ChrootBackend(ContainerBackend):
         finally:
             await self._cleanup_mounts(config)
     
+    async def start_nspawn(
+        self,
+        name: str,
+        command: list[str] | None = None,
+    ) -> None:
+        """Start container using systemd-nspawn (原版支持).
+        
+        systemd-nspawn provides better isolation than chroot
+        and supports systemd inside containers.
+        
+        Args:
+            name: Container name
+            command: Optional command to execute
+        """
+        self.check_root()
+        
+        config = self.load_container_config(name)
+        if not config:
+            raise ValueError(f"Container '{name}' not found")
+        
+        if not config.rootfs_path or not config.rootfs_path.exists():
+            raise ValueError(f"Container '{name}' rootfs not found")
+        
+        # Check if systemd-nspawn is available
+        nspawn_bin = shutil.which("systemd-nspawn")
+        if not nspawn_bin:
+            raise RuntimeError("systemd-nspawn not found. Please install systemd-container package.")
+        
+        # Build nspawn command (原版 nspawn 参数)
+        cmd = [
+            nspawn_bin,
+            f"--directory={config.rootfs_path}",
+            f"--machine={config.name}",
+            "--capability=all",
+            "--bind=/dev:/dev",
+            "--bind=/proc:/proc",
+            "--bind=/sys:/sys",
+        ]
+        
+        # Add network configuration
+        cmd.extend([
+            "--network-veth",  # Create virtual ethernet interface
+            "--private-network",  # Private network namespace
+        ])
+        
+        # Add user configuration
+        if config.user != "root":
+            cmd.append(f"--user={config.user}")
+        
+        # Environment variables
+        env = os.environ.copy()
+        env.update(self._get_env_vars(config))
+        
+        # Command to execute
+        if command:
+            cmd.extend(command)
+        else:
+            cmd.extend(["/bin/bash", "-l"])
+        
+        # Execute nspawn
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            env=env,
+            stdin=asyncio.subprocess.PIPE if not command else None,
+            stdout=asyncio.subprocess.PIPE if not command else None,
+            stderr=asyncio.subprocess.PIPE if not command else None,
+        )
+        
+        if not command:
+            await proc.wait()
+    
     def _get_env_vars(self, config: ContainerConfig) -> dict[str, str]:
-        """Get environment variables for container."""
-        return {
+        """Get environment variables for container (原版环境变量)."""
+        env_vars: dict[str, str] = {
             "HOSTNAME": config.name,
             "HOME": config.home,
             "USER": config.user,
-            "TERM": "xterm-256color",
-            "DISPLAY": config.display,
+            "TERM": os.environ.get("TERM", "xterm-256color"),
             "TMOE_CHROOT": "true",
             "TMOE_PROOT": "false",
             "TMOE_CONTAINER_NAME": config.name,
             "TMOE_CONTAINER_TYPE": "chroot",
+            "TMOE_NSPAWN": "false",
         }
+        
+        if config.display:
+            env_vars["DISPLAY"] = config.display
+        
+        return env_vars
     
     async def _run_cmd(self, cmd: list[str]) -> None:
         """Run a command and wait for completion."""
@@ -358,3 +486,121 @@ class ChrootBackend(ContainerBackend):
         await proc.wait()
         if proc.returncode != 0:
             raise RuntimeError(f"Command failed: {' '.join(cmd)}")
+
+    def generate_startup_script(self, name: str, use_nspawn: bool = False) -> str:
+        """Generate startup script for container (原版启动脚本格式).
+
+        Args:
+            name: Container name
+            use_nspawn: Use systemd-nspawn instead of chroot
+
+        Returns:
+            Shell script content for starting container
+        """
+        config = self.load_container_config(name)
+        if not config:
+            raise ValueError(f"Container '{name}' not found")
+
+        if use_nspawn:
+            # systemd-nspawn script
+            script = f'''#!/bin/bash
+# TMOE systemd-nspawn Container Startup Script
+# Generated automatically - do not edit manually
+
+TMOE_CONTAINER_NAME="{config.name}"
+TMOE_CONTAINER_TYPE="nspawn"
+TMOE_DISTRO="{config.distron}"
+TMOE_ARCH="{config.arch}"
+
+# Check for systemd-nspawn
+if ! command -v systemd-nspawn &> /dev/null; then
+    echo "Error: systemd-nspawn not found"
+    echo "Please install: apt install systemd-container"
+    exit 1
+fi
+
+# Environment
+export HOME="{config.home}"
+export USER="{config.user}"
+
+# Start container
+echo "Starting TMOE systemd-nspawn container: {config.name}"
+systemd-nspawn \\
+    --directory="{config.rootfs_path}" \\
+    --machine="{config.name}" \\
+    --capability=all \\
+    --bind=/dev:/dev \\
+    --bind=/proc:/proc \\
+    --bind=/sys:/sys \\
+    --network-veth \\
+    --user="{config.user}" \\
+    /bin/bash -l
+'''
+        else:
+            # chroot script (原版格式)
+            script = f'''#!/bin/bash
+# TMOE Chroot Container Startup Script
+# Generated automatically - do not edit manually
+
+TMOE_CONTAINER_NAME="{config.name}"
+TMOE_CONTAINER_TYPE="chroot"
+TMOE_DISTRO="{config.distro}"
+TMOE_ARCH="{config.arch}"
+
+ROOTFS="{config.rootfs_path}"
+
+# Check root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: Chroot requires root privileges"
+    exit 1
+fi
+
+# Mount filesystems
+echo "Mounting filesystems..."
+mount --rbind "$ROOTFS" "$ROOTFS/"
+mount -o remount,exec,suid,relatime,dev "$ROOTFS"
+mount -o bind /dev "$ROOTFS/dev"
+mount -t proc proc "$ROOTFS/proc"
+mount -t sysfs sysfs "$ROOTFS/sys"
+mount -t devpts devpts "$ROOTFS/dev/pts"
+mount -t tmpfs tmpfs "$ROOTFS/dev/shm"
+
+# Cleanup function
+cleanup() {{
+    echo "Unmounting filesystems..."
+    umount -l "$ROOTFS/dev/shm" 2>/dev/null || true
+    umount -l "$ROOTFS/dev/pts" 2>/dev/null || true
+    umount -l "$ROOTFS/sys" 2>/dev/null || true
+    umount -l "$ROOTFS/proc" 2>/dev/null || true
+    umount -l "$ROOTFS/dev" 2>/dev/null || true
+    umount -l "$ROOTFS" 2>/dev/null || true
+}}
+trap cleanup EXIT
+
+# Environment setup
+export HOME="{config.home}"
+export USER="{config.user}"
+export TERM="{os.environ.get('TERM', 'xterm-256color')}"
+export LANG="C.UTF-8"
+export TMOE_CHROOT=true
+export TMOE_PROOT=false
+export TMOE_CONTAINER_NAME="{config.name}"
+
+# Start container
+echo "Starting TMOE chroot container: {config.name}"
+echo "Distribution: {config.distro} ({config.arch})"
+echo "User: {config.user}"
+echo ""
+
+chroot "$ROOTFS" /usr/bin/env -i \\
+    HOME="{config.home}" \\
+    USER="{config.user}" \\
+    TERM="$TERM" \\
+    LANG="$LANG" \\
+    TMOE_CHROOT=true \\
+    TMOE_PROOT=false \\
+    TMOE_CONTAINER_NAME="{config.name}" \\
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \\
+    /bin/bash -l
+'''
+        return script
