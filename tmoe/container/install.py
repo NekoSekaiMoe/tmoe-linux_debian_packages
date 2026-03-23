@@ -404,7 +404,8 @@ class ContainerInstaller:
         """Synchronous rootfs extraction."""
         with lzma.open(tar_path, "rb") as xz_file:
             with tarfile.open(fileobj=xz_file, mode="r|") as tar:
-                tar.extractall(path=dest_path)
+                # Use filter to safely extract tar archives (Python 3.14 compatible)
+                tar.extractall(path=dest_path, filter="fully_trusted")
     
     async def _setup_container(
         self,

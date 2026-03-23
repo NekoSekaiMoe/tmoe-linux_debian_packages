@@ -165,11 +165,17 @@ class NoVncManager:
     async def stop(self) -> None:
         """Stop noVNC server."""
         if self._websockify_proc:
-            self._websockify_proc.terminate()
+            # Handle both sync and async terminate (for testing compatibility)
+            result = self._websockify_proc.terminate()
+            if asyncio.iscoroutine(result):
+                await result
             try:
                 await asyncio.wait_for(self._websockify_proc.wait(), timeout=5)
             except asyncio.TimeoutError:
-                self._websockify_proc.kill()
+                # Handle both sync and async kill (for testing compatibility)
+                result = self._websockify_proc.kill()
+                if asyncio.iscoroutine(result):
+                    await result
                 await self._websockify_proc.wait()
             self._websockify_proc = None
     

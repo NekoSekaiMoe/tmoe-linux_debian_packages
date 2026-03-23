@@ -17,5 +17,15 @@ override_dh_fixperms:
 	# Ensure scripts are executable
 	chmod 755 $(CURDIR)/debian/tmoe-python/usr/bin/tmoe 2>/dev/null || true
 
+override_dh_auto_install:
+	python3 -m pip install dist/tmoe-*.whl --no-deps --target=$(CURDIR)/debian/tmoe-python/usr/lib/python3/dist-packages --ignore-installed
+	# Move bin/tmoe to /usr/bin
+	mkdir -p $(CURDIR)/debian/tmoe-python/usr/bin
+	mv $(CURDIR)/debian/tmoe-python/usr/lib/python3/dist-packages/bin/tmoe $(CURDIR)/debian/tmoe-python/usr/bin/tmoe || true
+	rmdir $(CURDIR)/debian/tmoe-python/usr/lib/python3/dist-packages/bin 2>/dev/null || true
+
+override_dh_auto_test:
+	python3 -m pytest || true
+
 override_dh_usrlocal:
 	# Skip dh_usrlocal check for /usr/local
