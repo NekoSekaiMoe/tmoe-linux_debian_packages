@@ -1,0 +1,52 @@
+{
+  "app_name": "TMOE - More Optional Environments",
+  "app_description": "Container management tool for Linux",
+
+  "menu_container_management": "Container Management",
+  "menu_container_management_desc": "Start, stop, and manage containers",
+  "menu_install_container": "Install Container",
+  "menu_install_container_desc": "Install a new Linux container",
+  "menu_vnc_services": "VNC Services",
+  "menu_vnc_services_desc": "Start/stop VNC or noVNC services",
+  "menu_mirror_sources": "Mirror Sources",
+  "menu_mirror_sources_desc": "Change package mirror sources",
+  "menu_configuration": "Configuration",
+  "menu_configuration_desc": "Configure TMOE settings",
+  "menu_about": "About / Help",
+  "menu_about_desc": "View version info and help",
+  "menu_exit": "Exit",
+  "menu_exit_desc": "Exit TMOE",
+
+  "container_select_title": "Select a Container",
+  "container_no_containers": "No containers found",
+  "container_name": "Name",
+  "container_type": "Type",
+  "container_distro": "Distro",
+  "container_arch": "Arch",
+  "container_status": "Status",
+  "container_status_running": "running",
+  "container_status_stopped": "stopped",
+
+  "vnc_start_success": "VNC server started on port {{.Port}}",
+  "vnc_stop_success": "VNC server stopped",
+  "vnc_already_running": "VNC server is already running",
+  "vnc_not_running": "VNC server is not running",
+  "vnc_not_found": "VNC server not found, please install tigervnc or x11vnc",
+
+  "error_no_containers": "No containers found. Use --install to create one.",
+  "error_container_not_found": "Container {{.Name}} not found",
+  "error_chroot_requires_root": "Chroot requires root privileges. Try using 'sudo' or 'proot' instead.",
+  "error_proot_not_found": "Proot not found. Please install it first.",
+
+  "help_navigation": "↑/↓: navigate • enter: select • q: quit",
+  "help_filter": "↑/↓: navigate • /: filter • enter: select • q: back",
+
+  "confirm_exit": "Are you sure you want to exit?",
+  "confirm_yes": "Yes",
+  "confirm_no": "No",
+
+  "success": "Success",
+  "error": "Error",
+  "warning": "Warning",
+  "info": "Info"
+}

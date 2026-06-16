@@ -1,0 +1,16 @@
+#!/bin/zsh
+#------------------
+GITEE_DIR="${HOME}/Documents/data/git/ee/tmoe"
+GITHUB_DIR="${HOME}/Documents/data/git/hub/tmoe"
+OLD_VERSION_DIR="${GITEE_DIR}/share/old-version"
+
+##########
+cd "${GITEE_DIR}" || exit 1
+
+for i ($(print -l (.*|*) | grep -Ev "test|Readme.*|README.md|.git$|.gitee")) {
+    cp -va "${i}" "${GITHUB_DIR}"
+}
+
+cd "${GITHUB_DIR}"/share/sed/ || exit 1
+./sed_github
+###########

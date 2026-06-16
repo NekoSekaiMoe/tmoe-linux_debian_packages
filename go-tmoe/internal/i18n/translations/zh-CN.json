@@ -1,0 +1,52 @@
+{
+  "app_name": "TMOE - 更多可选环境",
+  "app_description": "Linux 容器管理工具",
+
+  "menu_container_management": "容器管理",
+  "menu_container_management_desc": "启动、停止和管理容器",
+  "menu_install_container": "安装容器",
+  "menu_install_container_desc": "安装新的 Linux 容器",
+  "menu_vnc_services": "VNC 服务",
+  "menu_vnc_services_desc": "启动/停止 VNC 或 noVNC 服务",
+  "menu_mirror_sources": "镜像源",
+  "menu_mirror_sources_desc": "更换软件包镜像源",
+  "menu_configuration": "配置",
+  "menu_configuration_desc": "配置 TMOE 设置",
+  "menu_about": "关于 / 帮助",
+  "menu_about_desc": "查看版本信息和帮助",
+  "menu_exit": "退出",
+  "menu_exit_desc": "退出 TMOE",
+
+  "container_select_title": "选择容器",
+  "container_no_containers": "未找到容器",
+  "container_name": "名称",
+  "container_type": "类型",
+  "container_distro": "发行版",
+  "container_arch": "架构",
+  "container_status": "状态",
+  "container_status_running": "运行中",
+  "container_status_stopped": "已停止",
+
+  "vnc_start_success": "VNC 服务器已在端口 {{.Port}} 启动",
+  "vnc_stop_success": "VNC 服务器已停止",
+  "vnc_already_running": "VNC 服务器已在运行",
+  "vnc_not_running": "VNC 服务器未运行",
+  "vnc_not_found": "未找到 VNC 服务器，请安装 tigervnc 或 x11vnc",
+
+  "error_no_containers": "未找到容器。使用 --install 创建一个。",
+  "error_container_not_found": "未找到容器 {{.Name}}",
+  "error_chroot_requires_root": "Chroot 需要 root 权限。请尝试使用 'sudo' 或 'proot'。",
+  "error_proot_not_found": "未找到 proot。请先安装它。",
+
+  "help_navigation": "↑/↓: 导航 • 回车: 选择 • q: 退出",
+  "help_filter": "↑/↓: 导航 • /: 过滤 • 回车: 选择 • q: 返回",
+
+  "confirm_exit": "确定要退出吗？",
+  "confirm_yes": "是",
+  "confirm_no": "否",
+
+  "success": "成功",
+  "error": "错误",
+  "warning": "警告",
+  "info": "信息"
+}
